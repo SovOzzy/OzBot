@@ -106,6 +106,7 @@ You can export at any point, even halfway through training, to hear how it's goi
 | `prepare.py` / `prepare.sh` | clips, then Whisper transcripts, then the cut 22,050 Hz dataset and `metadata.csv` |
 | `piper_train.py` | Starts Piper training; skips the `val_mos` checkpoint quietly when torchaudio/the quality score is missing |
 | `train.sh` | Fine-tune (warm start from Lessac medium; resumes automatically) |
+| `piper_export.py` | Piper's ONNX export forced onto the classic exporter (new PyTorch's default one fails on Piper's model) |
 | `export.sh` | Newest checkpoint to `.onnx` + `.onnx.json`, plus a test sentence |
 | `work/`, `output/`, `checkpoints/`, `.venv/`, `piper1-gpl/` | Created locally and not committed (big) |
 

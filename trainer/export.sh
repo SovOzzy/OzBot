@@ -14,7 +14,7 @@ CKPT=$(ls -t "$W"/train/lightning_logs/version_*/checkpoints/*.ckpt 2>/dev/null 
 . .venv/bin/activate
 mkdir -p output
 echo "Exporting $CKPT"
-python -m piper.train.export_onnx --checkpoint "$CKPT" --output-file "output/$NAME.onnx"
+python piper_export.py --checkpoint "$CKPT" --output-file "output/$NAME.onnx"
 cp "$W/config.json" "output/$NAME.onnx.json"
 python -m piper -m "output/$NAME.onnx" -f "output/$NAME-test.wav" -- "Hello! This is my new voice. If you can hear me, the training worked."
 ls -lh "output/$NAME.onnx" "output/$NAME.onnx.json"
