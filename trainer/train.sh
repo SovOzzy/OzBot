@@ -37,7 +37,11 @@ fi
 
 echo "Training '$VOICE': $EPOCHS epochs, accent $ESPEAK, batch $BATCH. Watch progress with:"
 echo "  . .venv/bin/activate && tensorboard --logdir $W/train   (then open http://localhost:6006, Audio tab)"
-python -m piper.train fit \
+# quality score (val_mos) needs torchaudio; without it, switch the score off instead of downloading for nothing
+MOS=()
+python -c "import torchaudio" 2>/dev/null || { echo "(torchaudio not installed: quality score val_mos off, checkpoints by val_mel + last)"; MOS=(--model.mos_metric none); }
+
+python piper_train.py fit \
   --data.voice_name "$VOICE" \
   --data.csv_path "$W/dataset/metadata.csv" \
   --data.audio_dir "$W/dataset/wavs" \
@@ -48,5 +52,6 @@ python -m piper.train fit \
   --data.batch_size "$BATCH" \
   --trainer.max_epochs "$EPOCHS" \
   --trainer.default_root_dir "$W/train" \
+  "${MOS[@]}" \
   "${RESUME[@]}"
 echo "Training finished. Run ./export.sh $VOICE"

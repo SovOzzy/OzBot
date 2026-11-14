@@ -104,6 +104,7 @@ You can export at any point, even halfway through training, to hear how it's goi
 | `setup.sh` | One-time install: venv, piper1-gpl `[train]`, faster-whisper, base checkpoint |
 | `import.py` / `import.sh` | Dashboard recording zip(s) become `work/<voice>/dataset` (no Whisper) |
 | `prepare.py` / `prepare.sh` | clips, then Whisper transcripts, then the cut 22,050 Hz dataset and `metadata.csv` |
+| `piper_train.py` | Starts Piper training; skips the `val_mos` checkpoint quietly when torchaudio/the quality score is missing |
 | `train.sh` | Fine-tune (warm start from Lessac medium; resumes automatically) |
 | `export.sh` | Newest checkpoint to `.onnx` + `.onnx.json`, plus a test sentence |
 | `work/`, `output/`, `checkpoints/`, `.venv/`, `piper1-gpl/` | Created locally and not committed (big) |
