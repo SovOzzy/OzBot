@@ -66,7 +66,8 @@ Options: `./prepare.sh <voice> --model medium` (faster Whisper, slightly worse),
 ```bash
 ./train.sh <voice>              # 2000 epochs (the recommended fine-tune length)
 ./train.sh <voice> 1000         # shorter test run
-ESPEAK=en-us ./train.sh <voice> # accent used for pronunciation (default en-gb)
+ESPEAK=en-gb-x-rp ./train.sh <voice> # accent for pronunciation: en (British, default), en-gb-x-rp (southern/RP),
+                                     # en-gb-scotland, en-us ...
 BATCH=8 ./train.sh <voice>      # if you get "CUDA out of memory"
 ```
 
@@ -113,5 +114,5 @@ You can export at any point, even halfway through training, to hear how it's goi
   figures. Tell the server it's a synthetic voice.
 - Training code: [OHF-Voice/piper1-gpl](https://github.com/OHF-Voice/piper1-gpl) (GPL-3.0). It's cloned at setup and
   not bundled here. Its `docs/TRAINING.md` explains every option.
-- Fine-tuning from an en_US checkpoint with `ESPEAK=en-gb` is normal: the checkpoint gives the model a head start,
+- Fine-tuning from an en_US checkpoint with a British `ESPEAK` accent is normal: the checkpoint gives the model a head start,
   and your clips and the espeak accent decide how it ends up sounding.

@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
 # Fine-tune a Piper voice from the Lessac checkpoint on work/<voice>/dataset.
 # Usage: ./train.sh <voice> [epochs]       (Ctrl+C stops; run again to resume from the last checkpoint)
-# Env:   ESPEAK=en-gb (accent for pronunciation: en-gb, en-us, en-gb-scotland, en-gb-x-rp ...)
+# Env:   ESPEAK=en (accent for pronunciation: en = British, en-gb-x-rp = southern/RP, en-gb-scotland, en-us ...)
 #        BATCH=16 (lower to 8 if you run out of GPU memory, raise to 32 on 24 GB cards)
 set -euo pipefail
 cd "$(dirname "$0")"
 VOICE="${1:?Usage: ./train.sh <voice-name> [epochs]}"
 EPOCHS="${2:-2000}"
-ESPEAK="${ESPEAK:-en-gb}"
+ESPEAK="${ESPEAK:-en}"
 BATCH="${BATCH:-16}"
 W="work/$VOICE"
 [ -f "$W/dataset/metadata.csv" ] || { echo "Run ./prepare.sh $VOICE first"; exit 1; }
 . .venv/bin/activate
+# check the accent name now, not 10 minutes into preprocessing
+python - "$ESPEAK" <<'PY' || exit 1
+import sys
+from pathlib import Path
+from piper.phonemize_espeak import EspeakPhonemizer, ESPEAK_DATA_DIR
+voice = sys.argv[1]
+try:
+    EspeakPhonemizer().phonemize(voice, "test")
+except Exception:
+    names = sorted(p.name for p in (Path(ESPEAK_DATA_DIR) / "lang" / "gmw").iterdir() if p.name.lower().startswith("en"))
+    sys.exit(f"Unknown accent ESPEAK={voice}. English options: {', '.join(names)} (lower-case works too)")
+PY
 mkdir -p "$W/train" "$W/cache"
 
 RESUME=()
