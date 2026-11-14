@@ -1,0 +1,25 @@
+[Unit]
+Description=OzBot Discord bot + dashboard (tailnet only)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Projects/OzBot
+Environment=PATH=/home/ubuntu/.local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/home/ubuntu
+Environment=NODE_ENV=production
+# Optional: OZBOT_TOKEN=... in this file instead of setting the token on the dashboard
+EnvironmentFile=-/home/ubuntu/.ozbot.env
+ExecStart=/usr/bin/node core/main.mjs
+Restart=always
+RestartSec=5
+# Shared VPS: always yield CPU to Gildesk Studio / OzAds, hard memory cap (bot ~110 MB + voice engine ~250 MB)
+Nice=10
+CPUWeight=50
+MemoryHigh=600M
+MemoryMax=800M
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

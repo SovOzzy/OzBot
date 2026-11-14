@@ -1,0 +1,23 @@
+{
+  "id": "voice",
+  "name": "Voice chat",
+  "description": "Joins a voice channel and talks: random sentences from Markov chat every few minutes, or whatever /say tells it.\nCan join by itself when someone is in the home channel and leave again when everyone has gone.",
+  "icon": "mic",
+  "order": 20,
+  "requires": ["voices"],
+  "settings": [
+    { "key": "homeChannel", "type": "voiceChannel", "label": "Home voice channel", "help": "Where OzBot hangs out. /join with no channel also uses this.", "default": "" },
+    { "key": "autoJoin", "type": "boolean", "label": "Join by itself", "help": "Joins the home channel when a person is in it.", "default": true },
+    { "key": "leaveWhenAlone", "type": "boolean", "label": "Leave when alone", "default": true },
+    { "key": "leaveDelay", "type": "number", "label": "Leave after (seconds alone)", "default": 60, "min": 5, "max": 3600, "step": 1 },
+    { "key": "randomTalk", "type": "boolean", "label": "Say random sentences", "help": "Uses Markov chat. Only while people are in the channel.", "default": true },
+    { "key": "intervalMin", "type": "number", "label": "Shortest gap between sentences (minutes)", "default": 3, "min": 0.5, "max": 240, "step": 0.5 },
+    { "key": "intervalMax", "type": "number", "label": "Longest gap between sentences (minutes)", "default": 10, "min": 0.5, "max": 240, "step": 0.5 },
+    { "key": "voice", "type": "voice", "label": "Voice", "help": "Empty = the default from Voice profiles.", "default": "" },
+    { "key": "greet", "type": "boolean", "label": "Say hello on join", "default": false },
+    { "key": "greeting", "type": "text", "label": "Greeting", "default": "Hello everyone, OzBot is here.", "maxLength": 200 },
+    { "key": "allowSay", "type": "boolean", "label": "Allow /say", "help": "Anyone in the channel can make OzBot say something.", "default": true },
+    { "key": "maxSayChars", "type": "number", "label": "Longest /say (characters)", "default": 250, "min": 20, "max": 600, "step": 1 },
+    { "key": "maxQueue", "type": "number", "label": "Queue length", "help": "Sentences waiting to be spoken; extra ones are dropped.", "default": 4, "min": 1, "max": 20, "step": 1 }
+  ]
+}

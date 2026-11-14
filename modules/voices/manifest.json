@@ -1,0 +1,11 @@
+{
+  "id": "voices",
+  "name": "Voice profiles",
+  "description": "Your library of voices: the stock ones plus any you train on your PC with the trainer folder.\nUpload the .onnx + .onnx.json pair here, give it a name, tune speed and expression, and preview it.",
+  "icon": "wave",
+  "order": 30,
+  "provides": ["voices"],
+  "settings": [
+    { "key": "defaultVoice", "type": "voice", "label": "Default voice", "help": "Used whenever nothing else picks a voice.", "default": "en_GB-alan-medium" }
+  ]
+}

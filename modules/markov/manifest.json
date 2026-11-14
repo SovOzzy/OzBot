@@ -1,0 +1,24 @@
+{
+  "id": "markov",
+  "name": "Markov chat",
+  "description": "Learns how your server talks from the channels you choose and mixes those messages into new sentences.\nOther functions (like Voice chat) use it as their source of things to say; it can also chime in on its own.",
+  "icon": "chat",
+  "order": 10,
+  "provides": ["sentences"],
+  "settings": [
+    { "key": "channels", "type": "textChannels", "label": "Channels to learn from", "help": "OzBot reads new messages here. Nothing outside these channels is stored.", "default": [] },
+    { "key": "order", "type": "select", "label": "Chain length", "help": "How many words it looks back. 1 = wild nonsense, 2 = balanced, 3 = close to real messages (needs lots of chat).", "default": 2,
+      "options": [{ "value": 1, "label": "1 word (chaotic)" }, { "value": 2, "label": "2 words (balanced)" }, { "value": 3, "label": "3 words (coherent)" }] },
+    { "key": "minWords", "type": "number", "label": "Shortest sentence (words)", "default": 4, "min": 1, "max": 30, "step": 1 },
+    { "key": "maxWords", "type": "number", "label": "Longest sentence (words)", "default": 25, "min": 3, "max": 80, "step": 1 },
+    { "key": "allowCopy", "type": "boolean", "label": "Allow exact copies", "help": "Off = never repeat someone's message word for word.", "default": false },
+    { "key": "maxMessages", "type": "number", "label": "Messages to keep", "help": "Oldest are forgotten first. 20,000 is about 3 MB.", "default": 20000, "min": 500, "max": 200000, "step": 1 },
+    { "key": "ignoreBots", "type": "boolean", "label": "Ignore other bots", "default": true },
+    { "key": "stripLinks", "type": "boolean", "label": "Remove links", "default": true },
+    { "key": "stripMentions", "type": "boolean", "label": "Remove @mentions", "default": true },
+    { "key": "ignorePrefixes", "type": "text", "label": "Ignore messages starting with", "help": "Space-separated, e.g. bot commands.", "default": "! / . ? $ ;;" },
+    { "key": "replyOnMention", "type": "boolean", "label": "Reply when @mentioned", "help": "In the learning channels. If the message has words, it tries to talk about one of them.", "default": true },
+    { "key": "replyChance", "type": "number", "label": "Random reply chance (%)", "help": "Chance of chiming in after any message in the learning channels. 0 = never.", "default": 0, "min": 0, "max": 25, "step": 1 },
+    { "key": "cooldownSeconds", "type": "number", "label": "Reply cooldown (seconds)", "default": 30, "min": 0, "max": 3600, "step": 1 }
+  ]
+}

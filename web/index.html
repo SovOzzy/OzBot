@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>OzBot</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/">
+      <img src="icon.svg" alt="" width="40" height="40">
+      <span><strong>OzBot</strong><small>Discord Bot</small></span>
+    </a>
+    <div class="conn" id="conn" aria-live="polite"></div>
+    <a class="iconbtn" href="#/bot" title="Bot settings" aria-label="Bot settings" id="cog"></a>
+  </header>
+  <main id="app"></main>
+  <div id="toasts" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

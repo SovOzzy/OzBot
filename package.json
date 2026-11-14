@@ -1,0 +1,21 @@
+{
+  "name": "ozbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OzBot - modular Discord bot with Markov chat and Piper TTS voice, plus a tailnet-only dashboard",
+  "type": "module",
+  "main": "core/main.mjs",
+  "scripts": {
+    "start": "node core/main.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "MIT",
+  "author": "Liam Osborne",
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.28.1"
+  }
+}
