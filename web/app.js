@@ -277,17 +277,34 @@ async function pageModule(id) {
   };
 }
 
+// Bot settings: Connection, then everything that applies Everywhere, then everything for one server.
 async function pageBot() {
   const core = await call('GET', '/api/core');
   const info = h('section', { class: 'card' });
   const tokenCard = h('section', { class: 'card' }, h('h2', {}, 'Discord token'));
-  const settings = h('section', { class: 'card' }, h('h2', {}, 'Server and presence'));
-  const profile = profileCard();
+  const pick = (keys) => core.fields.filter((f) => keys.includes(f.key));
+  const saveCore = async (body) => { await call('PUT', '/api/core', body); await poll(); guild = null; };
+
+  const presence = h('section', { class: 'card' }, h('h2', {}, 'Presence'),
+    h('p', { class: 'muted', style: 'margin-top:-6px' }, 'Discord shows one status for a bot in every server.'));
+  const serverPick = h('section', { class: 'card' }, h('h2', {}, 'Server'));
+  const globalProfile = profileCard('global');
+  const serverProfile = profileCard('server');
+  const acc = accessCards();
+  const b = core.bot;
+  const gName = b.guild?.name ?? 'this server';
+
   app.replaceChildren(h('a', { class: 'back', href: '#/', html: ICONS.back + ' All functions' }),
     h('div', { class: 'mhead' }, h('div', { class: 'ico', html: ICONS.cog }), h('div', { class: 'txt' }, h('h1', {}, 'Bot settings'),
-      h('p', {}, 'Connection to Discord, which server OzBot works in and how it shows up there.'))),
-    h('div', { class: 'cols' }, info, tokenCard), h('div', { style: 'height:16px' }), profile.el, settings,
-    h('section', { class: 'card' }, h('h2', {}, 'Channels and function settings'),
+      h('p', {}, 'Everything about OzBot itself. What each function does (channels, voices…) is on that function’s own page.'))),
+    h('nav', { class: 'jump', 'aria-label': 'Sections' }, h('a', { href: '#/bot', onclick: jump('s-conn') }, 'Connection'),
+      h('a', { href: '#/bot', onclick: jump('s-global') }, 'Everywhere'), h('a', { href: '#/bot', onclick: jump('s-server') }, `In ${gName}`)),
+    h('div', { class: 'cols', id: 's-conn' }, info, tokenCard),
+    scopeSection('s-global', 'globe', 'Everywhere', 'Applies in every server OzBot is in, and in DMs.',
+      globalProfile.el, presence, acc.globalEl),
+    scopeSection('s-server', 'server', `In ${gName}`, b.guild ? 'Only applies in this server. Admins (Manage Server) can always use every command and skip cooldowns.' : 'Invite OzBot to a server to set these.',
+      serverPick, serverProfile.el, acc.serverEl),
+    h('section', { class: 'card' }, h('h2', {}, 'Function settings'),
       h('p', { class: 'muted', style: 'margin-top:0' }, 'Each function keeps its own settings (which channels to read, which voice channel to sit in…) on its own page:'),
       h('div', { class: 'actions', style: 'margin-top:0' }, ...(state?.modules ?? []).map((m) =>
         h('a', { class: 'btn', href: `#/m/${m.id}` }, h('span', { html: ICONS[m.icon] ?? ICONS.puzzle, style: 'width:18px;height:18px;display:inline-flex' }), m.name)))));
@@ -295,12 +312,12 @@ async function pageBot() {
   const drawInfo = () => {
     const b = state?.bot ?? core.bot;
     const [k, t] = BOT_STATE[b.state] ?? ['off', b.state];
-    info.replaceChildren(h('h2', {}, 'Status'), h('dl', { class: 'kv' },
+    info.replaceChildren(h('h2', {}, 'Connection'), h('dl', { class: 'kv' },
       h('dt', {}, 'Discord'), h('dd', {}, h('span', { class: `pill ${k}` }, t)),
       b.error ? [h('dt', {}, 'Problem'), h('dd', {}, b.error)] : null,
       h('dt', {}, 'Logged in as'), h('dd', {}, b.user?.tag ?? '–'),
       h('dt', {}, 'Server'), h('dd', {}, b.guild?.name ?? (b.guildCount ? 'not chosen' : 'none')),
-      h('dt', {}, 'Ping'), h('dd', {}, b.ping != null ? `${b.ping} ms` : '–'),
+      h('dt', {}, 'Ping'), h('dd', {}, b.ping != null && b.ping >= 0 ? `${b.ping} ms` : '–'),
       h('dt', {}, 'Memory'), h('dd', {}, state ? `${state.process.rssMB} MB (bot)${state.tts.workerRunning ? ' + voice engine running' : ', voice engine asleep'}` : '–'),
       h('dt', {}, 'Version'), h('dd', {}, state?.version ?? '–')),
       b.invite ? h('div', { class: 'actions' }, h('a', { class: 'btn', href: b.invite, target: '_blank', rel: 'noopener' }, 'Invite to a server')) : '');
@@ -322,24 +339,63 @@ async function pageBot() {
       h('p', { class: 'help' }, 'Discord developer portal → your application → Bot → Reset Token. Also turn on “Message Content Intent” on that page.'), tok),
     h('div', { class: 'actions' }, btn)));
 
-  settings.append(await settingsForm(core.fields, core.settings, async (body) => {
-    await call('PUT', '/api/core', body); await poll(); guild = null; profile.load();
+  presence.append(await settingsForm(pick(['presence', 'activityType', 'statusText', 'showFunctionStatus']), core.settings, async (body) => {
+    await saveCore(body); globalProfile.load(); serverProfile.load();
+  }));
+  serverPick.append(await settingsForm(pick(['guildId']), core.settings, async (body) => {
+    const changed = body.guildId !== core.settings.guildId;
+    await saveCore(body);
+    if (changed) route(); // everything below belongs to the server
   }));
 }
 
-// ---- Profile card: preview + this-server and everywhere editors -------------------------------------------
+function jump(id) {
+  return (e) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    el?.setOpen?.(true); // jumping to a collapsed section opens it
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+}
+
+const SCOPE_ICONS = {
+  globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z"/><path d="M9 10h.01M15 10h.01M9 15c1.7 1.3 4.3 1.3 6 0"/></svg>',
+};
+// Collapsible scope (Everywhere / In <server>). Open or closed is remembered in this browser.
+const COLLAPSE_KEY = 'ozbot.bot.collapsed';
+const collapsed = () => { try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]')); } catch { return new Set(); } };
+function scopeSection(id, icon, title, text, ...kids) {
+  const body = h('div', { class: 'scope-body', id: `${id}-body` }, ...kids);
+  const btn = h('button', { type: 'button', class: 'scope', 'aria-controls': `${id}-body` },
+    h('span', { class: 'sico', html: SCOPE_ICONS[icon] }), h('span', { class: 'stxt' }, h('h2', {}, title), h('p', {}, text)),
+    h('span', { class: 'chev', 'aria-hidden': 'true', html: ICONS.back }));
+  const wrap = h('section', { class: 'scope-wrap', id, 'aria-label': title }, btn, body);
+  wrap.setOpen = (open) => {
+    btn.setAttribute('aria-expanded', String(open));
+    body.hidden = !open;
+    const set = collapsed();
+    if (open) set.delete(id); else set.add(id);
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set])); } catch {}
+  };
+  btn.onclick = () => wrap.setOpen(btn.getAttribute('aria-expanded') !== 'true');
+  const startOpen = !collapsed().has(id);
+  btn.setAttribute('aria-expanded', String(startOpen)); body.hidden = !startOpen;
+  return wrap;
+}
+
+// ---- Profile card (one per scope): preview + editors ---------------------------------------------------------
 const ACT_PREFIX = { custom: '', playing: 'Playing ', listening: 'Listening to ', watching: 'Watching ', competing: 'Competing in ' };
 const DOT = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', invisible: 'Invisible' };
 
-function profileCard() {
+function profileCard(scope) {
   const el = h('section', { class: 'card' }, h('h2', {}, 'Profile'));
   const body = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
   el.append(body);
   let p = null;
-  let view = 'server';
 
   const preview = () => {
-    const s = view === 'server' && p.server ? p.server : null;
+    const s = scope === 'server' ? p.server : null;
     const g = p.global;
     const avatar = s?.avatar || g.avatar;
     const banner = s?.banner || g.banner;
@@ -353,34 +409,33 @@ function profileCard() {
         h('strong', {}, (s?.nick) || g.username), h('div', { class: 'pv-user' }, g.username, h('span', { class: 'tag' }, 'APP')),
         line ? h('div', { class: 'pv-line' }, line, pr.fromFunction ? h('small', { class: 'muted' }, ' (from a function)') : '') : '',
         about ? h('div', { class: 'pv-about' }, h('b', {}, 'About me'), h('p', {}, about)) : ''),
-      p.server ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Preview' },
-        h('button', { type: 'button', 'aria-pressed': String(view === 'server'), onclick: () => { view = 'server'; draw(); } }, `In ${p.server.guildName}`),
-        h('button', { type: 'button', 'aria-pressed': String(view === 'global'), onclick: () => { view = 'global'; draw(); } }, 'Everywhere else')) : '');
+      h('div', { class: 'pv-cap' }, scope === 'server' ? `How people in ${s.guildName} see it` : 'How everyone else sees it'));
   };
 
   // Picks an image and uploads it straight away; Discord replies with the new profile.
-  const imageRow = (scope, kind, label, current, hint) => {
+  const imageRow = (kind, label, current, hint) => {
     const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', hidden: true, onchange: async () => {
       const f = file.files[0]; file.value = '';
       if (!f) return;
       if (f.size > 10 * 1024 * 1024) return toast('Images can be at most 10 MB', 'bad');
-      pick.disabled = true; pick.textContent = 'Uploading…';
+      pickBtn.disabled = true; pickBtn.textContent = 'Uploading…';
       try { p = await call('PUT', `/api/core/profile/${scope}/${kind}`, f); toast(`${label} changed`); poll(); }
       catch (e) { toast(e.message, 'bad'); }
       draw();
     } });
-    const pick = h('button', { type: 'button', class: 'btn', onclick: () => file.click() }, current ? 'Change…' : 'Choose…');
+    const pickBtn = h('button', { type: 'button', class: 'btn', onclick: () => file.click() }, current ? 'Change…' : 'Choose…');
     const remove = current ? h('button', { type: 'button', class: 'btn danger', onclick: async () => {
       remove.disabled = true;
       try { p = await call('DELETE', `/api/core/profile/${scope}/${kind}`); toast(`${label} removed`); poll(); }
       catch (e) { toast(e.message, 'bad'); }
       draw();
     } }, 'Remove') : '';
+    const cls = kind === 'banner' ? 'wide' : 'round';
     return h('div', { class: 'field' }, h('span', { class: 'lbl' }, label), h('p', { class: 'help' }, hint),
-      h('div', { class: 'imgrow' }, current ? h('img', { src: current, alt: '', class: kind === 'banner' ? 'wide' : 'round' }) : h('span', { class: `noimg ${kind === 'banner' ? 'wide' : 'round'}` }, 'none'), pick, remove, file));
+      h('div', { class: 'imgrow' }, current ? h('img', { src: current, alt: '', class: cls }) : h('span', { class: `noimg ${cls}` }, 'none'), pickBtn, remove, file));
   };
 
-  const textForm = (scope, fields) => {
+  const textForm = (fields) => {
     const inputs = {};
     const save = h('button', { class: 'btn primary', type: 'submit' }, 'Save');
     const form = h('form', { onsubmit: async (e) => {
@@ -407,22 +462,21 @@ function profileCard() {
   const draw = () => {
     if (!p) return;
     const s = p.server, g = p.global;
-    body.replaceChildren(h('div', { class: 'profile' }, h('div', {}, preview()), h('div', { class: 'stack' },
-      s ? h('div', { class: 'sub' }, h('h3', {}, `In ${s.guildName} only`),
-        h('p', { class: 'muted' }, 'Only people in this server see these. Empty means it uses the everywhere version.'),
+    if (scope === 'server' && !s) return body.replaceChildren(h('p', { class: 'muted' }, 'OzBot isn’t in a server yet.'));
+    const editors = scope === 'server'
+      ? [h('p', { class: 'muted', style: 'margin-top:0' }, 'Empty fields use the Everywhere version.'),
         s.canNick ? '' : h('div', { class: 'banner warn' }, 'OzBot lacks the “Change Nickname” permission here, so the nickname can’t be set.'),
-        textForm('server', [
+        textForm([
           { key: 'nick', label: 'Nickname', value: s.nick, max: 32, placeholder: g.username },
-          { key: 'bio', label: 'Server “about me”', value: s.bio, max: 190, long: true }]),
-        imageRow('server', 'avatar', 'Server avatar', s.avatar, 'Square, at least 256×256. GIFs animate.'),
-        imageRow('server', 'banner', 'Server banner', s.banner, 'Wide, about 680×240.')) : '',
-      h('div', { class: 'sub' }, h('h3', {}, 'Everywhere'),
-        h('p', { class: 'muted' }, 'The bot’s own account: every server, DMs and its profile.'),
-        textForm('global', [
+          { key: 'bio', label: 'About me (this server)', value: s.bio, max: 190, long: true }]),
+        imageRow('avatar', 'Avatar (this server)', s.avatar, 'Square, at least 256×256. GIFs animate.'),
+        imageRow('banner', 'Banner (this server)', s.banner, 'Wide, about 680×240.')]
+      : [textForm([
           { key: 'username', label: 'Username', value: g.username, max: 32, help: 'Discord allows about 2 changes an hour.' },
           { key: 'about', label: 'About me', value: g.about, max: 400, long: true, help: 'Same as the app description in the developer portal.' }]),
-        imageRow('global', 'avatar', 'Avatar', g.avatar, 'Square, at least 256×256. GIFs animate.'),
-        imageRow('global', 'banner', 'Banner', g.banner, 'Wide, about 680×240.')))));
+        imageRow('avatar', 'Avatar', g.avatar, 'Square, at least 256×256. GIFs animate.'),
+        imageRow('banner', 'Banner', g.banner, 'Wide, about 680×240.')];
+    body.replaceChildren(h('div', { class: 'profile' }, h('div', {}, preview()), h('div', { class: 'stack-tight' }, ...editors)));
   };
 
   const load = async () => {
@@ -431,6 +485,159 @@ function profileCard() {
   };
   load();
   return { el, load };
+}
+
+// ---- Commands: defaults everywhere, access + overrides per server ---------------------------------------------
+const WHO_OPTS = [['everyone', 'Everyone'], ['roles', 'Only some roles…'], ['admins', 'Admins only'], ['off', 'Nobody (switched off)']];
+
+function chipPicker(items, selected, { empty = 'Nothing to pick.' } = {}) {
+  const box = h('div', { class: 'chips' });
+  const sel = new Set(selected);
+  for (const it of items) box.append(h('label', { class: 'chip' }, h('input', { type: 'checkbox', value: it.id, checked: sel.has(it.id) }), it.label));
+  for (const id of selected.filter((x) => !items.some((it) => it.id === x))) box.append(h('label', { class: 'chip' }, h('input', { type: 'checkbox', value: id, checked: true }), `unknown ${id}`));
+  if (!box.childElementCount) box.append(h('span', { class: 'muted' }, empty));
+  box.read = () => [...box.querySelectorAll('input:checked')].map((i) => i.value);
+  return box;
+}
+
+const secs = (n) => !n ? 'none' : n < 60 ? `${n} s` : n % 3600 === 0 ? `${n / 3600} h` : n % 60 === 0 ? `${n / 60} min` : `${n} s`;
+
+function accessCards() {
+  const globalEl = h('div');
+  const serverEl = h('div');
+  (async () => {
+    let a;
+    try { a = await call('GET', '/api/access'); } catch (e) { globalEl.append(h('div', { class: 'banner bad' }, e.message)); return; }
+    const g = (await loadGuild(true))?.guild;
+    drawGlobal(a); drawServer(a, g);
+  })();
+
+  // Rows: commands with their subcommands; `fn(row)` builds the controls for each.
+  const rows = (catalog, fn) => h('div', { class: 'acl' }, ...catalog.flatMap((c) => [
+    h('div', { class: 'acl-row top' }, h('div', { class: 'acl-name' }, h('code', {}, `/${c.path}`),
+      h('span', { class: 'muted' }, c.description), c.running ? '' : h('span', { class: 'tag', title: `${c.module} is off` }, `${c.module} off`)),
+    fn({ ...c, isSub: false, invokable: !c.subs.length })),
+    ...c.subs.map((s) => h('div', { class: 'acl-row sub' }, h('div', { class: 'acl-name' }, h('code', {}, s.name), h('span', { class: 'muted' }, s.description)),
+      fn({ ...s, isSub: true, parent: c.path, invokable: true }))),
+  ]));
+
+  function drawGlobal(a) {
+    const inputs = {};
+    const table = rows(a.catalog, (r) => {
+      if (!r.invokable) return h('div', { class: 'acl-ctl muted' }, 'Set per subcommand');
+      if (r.open) return h('div', { class: 'acl-ctl muted' }, 'Never limited (privacy)');
+      const input = h('input', { type: 'number', min: 0, max: 86400, step: 1, inputmode: 'numeric', value: a.global.cooldowns[r.path] ?? 0, 'aria-label': `Cooldown for /${r.path} in seconds` });
+      inputs[r.path] = input;
+      return h('div', { class: 'acl-ctl' }, h('label', { class: 'secs' }, input, 's'));
+    });
+    const save = h('button', { class: 'btn primary', type: 'submit' }, 'Save cooldowns');
+    const ignored = userList(a.global.ignoredUsers);
+    const saveIgn = h('button', { class: 'btn primary', type: 'button' }, 'Save ignored users');
+    const body = () => ({ cooldowns: Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, Number(i.value) || 0])), ignoredUsers: ignored.read() });
+    const submit = async (btn) => {
+      btn.disabled = true;
+      try { a = await call('PUT', '/api/access/global', body()); toast('Saved'); drawServer(a, guild?.guild); }
+      catch (e) { toast(e.message, 'bad'); }
+      btn.disabled = false;
+    };
+    saveIgn.onclick = () => submit(saveIgn);
+    globalEl.replaceChildren(
+      h('section', { class: 'card' }, h('h2', {}, 'Command cooldowns'),
+        h('p', { class: 'muted', style: 'margin-top:-6px' }, 'How long each person waits between uses (seconds, 0 = no wait). A server can override these below.'),
+        h('form', { onsubmit: (e) => { e.preventDefault(); submit(save); } }, table, h('div', { class: 'actions' }, save))),
+      h('section', { class: 'card' }, h('h2', {}, 'Ignored users'),
+        h('p', { class: 'muted', style: 'margin-top:-6px' }, 'OzBot won’t answer their commands or learn from their messages, in any server.'),
+        ignored.el, h('div', { class: 'actions' }, saveIgn)));
+  }
+
+  function drawServer(a, g) {
+    if (!a.guild) return serverEl.replaceChildren();
+    const c = a.guild.config;
+    const roles = (g?.roles ?? []).map((r) => ({ id: r.id, label: `@${r.name}` }));
+    const ctl = {};
+    const table = rows(a.catalog, (r) => {
+      const rule = c.rules[r.path] ?? {};
+      if (r.open) return h('div', { class: 'acl-ctl muted' }, 'Always allowed, so anyone can opt out');
+      const opts = r.isSub ? [['inherit', `Same as /${r.parent}`], ...WHO_OPTS] : WHO_OPTS;
+      const who = h('select', { 'aria-label': `Who can use /${r.path}` }, ...opts.map(([v, l]) => h('option', { value: v, selected: v === (rule.who ?? (r.isSub ? 'inherit' : 'everyone')) }, l)));
+      const picker = chipPicker(roles, rule.roles ?? [], { empty: 'No roles found.' });
+      const pickWrap = h('div', { class: 'acl-roles', hidden: who.value !== 'roles' }, picker);
+      who.onchange = () => { pickWrap.hidden = who.value !== 'roles'; };
+      let cd = null;
+      if (r.invokable) {
+        const def = a.global.cooldowns[r.path] ?? 0;
+        cd = h('input', { type: 'number', min: 0, max: 86400, step: 1, inputmode: 'numeric', placeholder: `${def}`, value: rule.cooldown ?? '',
+          'aria-label': `Cooldown for /${r.path} in this server, empty uses ${secs(def)}`, title: `Empty = Everywhere default (${secs(def)})` });
+      }
+      ctl[r.path] = { who, picker, cd };
+      return h('div', { class: 'acl-ctl' }, who, cd ? h('label', { class: 'secs' }, cd, 's') : h('span', { class: 'secs muted' }, ''), pickWrap);
+    });
+    const save = h('button', { class: 'btn primary', type: 'submit' }, 'Save command access');
+
+    const chans = (g?.textChannels ?? []).map((ch) => ({ id: ch.id, label: `#${ch.name}` }));
+    const mode = h('select', { id: 'acc-chmode' }, ...[['all', 'Every channel'], ['only', 'Only these channels…'], ['except', 'Every channel except…']]
+      .map(([v, l]) => h('option', { value: v, selected: v === c.channelMode }, l)));
+    const chPick = chipPicker(chans, c.channels, { empty: 'No text channels found.' });
+    const chWrap = h('div', { hidden: c.channelMode === 'all' }, chPick);
+    mode.onchange = () => { chWrap.hidden = mode.value === 'all'; };
+    const bypass = chipPicker(roles, c.bypassRoles, { empty: 'No roles found.' });
+    const ignoredRoles = chipPicker(roles, c.ignoredRoles, { empty: 'No roles found.' });
+
+    const body = () => ({
+      rules: Object.fromEntries(Object.entries(ctl).map(([p, x]) => [p, { who: x.who.value, roles: x.picker.read(), cooldown: x.cd?.value ?? '' }])),
+      channelMode: mode.value, channels: chPick.read(), bypassRoles: bypass.read(), ignoredRoles: ignoredRoles.read(),
+    });
+    const submit = async (btn) => {
+      btn.disabled = true;
+      try { a = await call('PUT', '/api/access/guild', body()); toast('Saved'); drawServer(a, g); }
+      catch (e) { toast(e.message, 'bad'); btn.disabled = false; }
+    };
+    const saveBtn = (label) => { const b = h('button', { class: 'btn primary', type: 'button' }, label); b.onclick = () => submit(b); return b; };
+
+    serverEl.replaceChildren(
+      h('section', { class: 'card' }, h('h2', {}, 'Command access'),
+        h('p', { class: 'muted', style: 'margin-top:-6px' }, 'Who can use each command here, and an optional cooldown just for this server (empty = the Everywhere cooldown). Switched-off commands disappear from Discord’s command list.'),
+        h('div', { class: 'acl-head' }, h('span', {}, 'Command'), h('span', {}, 'Who can use it · cooldown (s)')),
+        h('form', { onsubmit: (e) => { e.preventDefault(); submit(save); } }, table, h('div', { class: 'actions' }, save))),
+      h('div', { class: 'cols' },
+        h('section', { class: 'card' }, h('h2', {}, 'Channels'),
+          h('p', { class: 'muted', style: 'margin-top:-6px' }, 'Where OzBot’s commands work. Its functions’ own channel settings still apply.'),
+          h('div', { class: 'field' }, h('label', { for: 'acc-chmode' }, 'Commands work in'), mode, chWrap),
+          h('div', { class: 'actions' }, saveBtn('Save channels'))),
+        h('section', { class: 'card' }, h('h2', {}, 'Roles'),
+          h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Skip cooldowns'), h('p', { class: 'help' }, 'People with any of these roles never wait.'), bypass),
+          h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Ignore'), h('p', { class: 'help' }, 'OzBot won’t answer or learn from people with these roles.'), ignoredRoles),
+          h('div', { class: 'actions' }, saveBtn('Save roles')))));
+  }
+
+  return { globalEl, serverEl };
+}
+
+// A list of users with names and avatars: add by name, @mention or ID; remove with ×.
+function userList(initial) {
+  let ids = [...initial];
+  const names = new Map();
+  const list = h('div', { class: 'chips' });
+  const q = h('input', { type: 'text', placeholder: 'Name, @name or user ID', 'aria-label': 'Find a user to ignore', maxlength: 40 });
+  const results = h('div', { class: 'chips' });
+  const draw = () => list.replaceChildren(...(ids.length ? ids.map((id) => {
+    const u = names.get(id);
+    return h('span', { class: 'chip user' }, u?.avatar ? h('img', { src: u.avatar, alt: '' }) : '', u?.name ?? id,
+      h('button', { type: 'button', class: 'x', 'aria-label': `Remove ${u?.name ?? id}`, onclick: () => { ids = ids.filter((x) => x !== id); draw(); } }, '×'));
+  }) : [h('span', { class: 'muted' }, 'Nobody is ignored.')]));
+  const find = async (e) => {
+    e?.preventDefault();
+    if (!q.value.trim()) return;
+    const r = await call('GET', `/api/access/users?q=${encodeURIComponent(q.value.trim())}`).catch((err) => (toast(err.message, 'bad'), { users: [] }));
+    results.replaceChildren(...(r.users.length ? r.users.map((u) => h('button', { type: 'button', class: 'chip user', onclick: () => {
+      names.set(u.id, u); if (!ids.includes(u.id)) ids.push(u.id); results.replaceChildren(); q.value = ''; draw();
+    } }, u.avatar ? h('img', { src: u.avatar, alt: '' }) : '', `Add ${u.name}`, u.username && u.username !== u.name ? h('small', {}, ` @${u.username}`) : '')) : [h('span', { class: 'muted' }, 'No one found.')]));
+  };
+  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') find(e); });
+  if (ids.length) call('GET', `/api/access/users?ids=${ids.join(',')}`).then((r) => { for (const u of r.users) names.set(u.id, u); draw(); }).catch(() => {});
+  draw();
+  const el = h('div', { class: 'stack-tight' }, list, h('div', { class: 'finder' }, q, h('button', { type: 'button', class: 'btn', onclick: find }, 'Find')), results);
+  return { el, read: () => [...ids] };
 }
 
 // ---- router --------------------------------------------------------------------------------------------

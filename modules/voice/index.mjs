@@ -7,7 +7,7 @@
 //   'voice:joined' { channel: {id,name} }
 //   'voice:left'   { channel: {id,name}, durationMs, lines }
 // Service 'voicechat': { connected(), say(text, { voice, source, user }), voiceName(id) }
-import { Events, SlashCommandBuilder, MessageFlags, ChannelType, PermissionFlagsBits } from 'discord.js';
+import { Events, SlashCommandBuilder, MessageFlags, ChannelType } from 'discord.js';
 import {
   joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, entersState,
   AudioPlayerStatus, VoiceConnectionStatus, StreamType, NoSubscriberBehavior,
@@ -241,13 +241,6 @@ async function voiceAutocomplete(ctx, i) {
     .slice(0, 25).map((v) => ({ name: v.profile.name.slice(0, 100), value: v.id })));
 }
 
-function mayChangeVoice(ctx, i) {
-  const role = ctx.settings.voiceChangeRole;
-  if (!role) return true;
-  if (i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
-  return Boolean(i.member?.roles?.cache?.has(role));
-}
-
 async function commandJoin(ctx, i, channel) {
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   try { await join(ctx, channel); await i.editReply(`Joined ${channel}.`); }
@@ -346,10 +339,6 @@ export default {
         if (sub === 'list') {
           const lines = usableVoices(ctx).map((v) => `${v.id === current?.voice ? '▶️' : '•'} **${v.profile.name}**`);
           return i.reply(ephemeral(lines.length ? lines.join('\n') : 'No voices installed.'));
-        }
-        if (!mayChangeVoice(ctx, i)) {
-          const role = i.guild.roles.cache.get(ctx.settings.voiceChangeRole);
-          return i.reply(ephemeral(`Only people with the ${role ? `**${role.name}**` : 'right'} role can change the voice.`));
         }
         const want = i.options.getString('name');
         const pick = usableVoices(ctx).find((v) => v.id === want)

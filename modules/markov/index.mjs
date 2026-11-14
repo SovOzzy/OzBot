@@ -96,6 +96,7 @@ export default {
     });
 
     ctx.on(Events.MessageCreate, async (msg) => {
+      if (ctx.ignored(msg.author.id, msg.member)) return;
       if (!learn(ctx, msg)) {
         // still allow replies to mentions in the channel even if the message itself wasn't stored
         if (!msg.guildId || !ctx.settings.channels.includes(msg.channelId) || msg.author.bot) return;
@@ -131,6 +132,7 @@ export default {
         .addSubcommand((c) => c.setName('forget-me').setDescription('Delete everything OzBot learned from you and stop learning'))
         .addSubcommand((c) => c.setName('learn-me').setDescription('Let OzBot learn from your messages again'))
         .addSubcommand((c) => c.setName('stats').setDescription('How much OzBot has learned')),
+      open: ['forget-me', 'learn-me'], // privacy: always allowed, whatever Bot settings say
       async run(ctx, i) {
         const sub = i.options.getSubcommand();
         if (sub === 'say') {

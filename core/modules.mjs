@@ -16,8 +16,8 @@ const FAULT_LIMIT = 5;            // errors ...
 const FAULT_WINDOW = 10 * 60e3;   // ... within this window switch the module off
 
 export class ModuleManager {
-  constructor({ root, dataDir, store, bot, tts, log, cfg = {} }) {
-    Object.assign(this, { root, dataDir, store, bot, tts, log, cfg });
+  constructor({ root, dataDir, store, bot, tts, log, cfg = {}, access = null }) {
+    Object.assign(this, { root, dataDir, store, bot, tts, log, cfg, access });
     this.mods = new Map();      // id -> { manifest, impl, ctx, status, error, errors[], running, disposers[] }
     this.services = new Map();  // name -> { from, api }
     this.commandTimer = null;
@@ -71,6 +71,8 @@ export class ModuleManager {
       get running() { return m.running; },
       get settings() { return mgr.settings(id); },
       guild: () => this.bot.guild(),
+      // Users/roles OzBot ignores (Bot settings). Modules that read messages should skip them.
+      ignored: (userId, member) => mgr.access?.ignored(userId, member) ?? false,
       log: (...a) => this.log(`[${id}]`, ...a),
       on(event, fn) {
         const g = guard(fn, `event ${event}`);
@@ -207,7 +209,10 @@ export class ModuleManager {
     const guild = this.bot.guild();
     if (!guild) return;
     const body = [];
-    for (const m of this.mods.values()) if (m.running) for (const c of m.impl.commands ?? []) body.push(c.data.toJSON?.() ?? c.data);
+    for (const m of this.mods.values()) if (m.running) for (const c of m.impl.commands ?? []) {
+      const data = c.data.toJSON?.() ?? c.data;
+      if (!this.access?.offInGuild(guild.id, data.name)) body.push(data);
+    }
     await guild.commands.set(body);
     this.log(`slash commands synced: ${body.map((c) => '/' + c.name).join(' ') || '(none)'}`);
   }
@@ -235,7 +240,11 @@ export class ModuleManager {
         if (!cmd) continue;
         try {
           if (i.isAutocomplete()) await cmd.autocomplete?.(m.ctx, i);
-          else await cmd.run(m.ctx, i);
+          else {
+            const denied = this.access?.check(i, cmd);
+            if (denied) return void i.reply({ content: denied, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } }).catch(() => {});
+            await cmd.run(m.ctx, i);
+          }
         } catch (e) {
           this.#recordError(m, e, `/${i.commandName}`);
           if (i.isChatInputCommand()) {
@@ -248,6 +257,20 @@ export class ModuleManager {
       if (i.isChatInputCommand()) i.reply({ content: 'That function is switched off right now.', flags: MessageFlags.Ephemeral }).catch(() => {});
     });
   }
+
+  // Every command of every module (on or off), for the access table in Bot settings.
+  commandCatalog() {
+    const out = [];
+    for (const m of this.mods.values()) for (const c of m.impl.commands ?? []) {
+      const d = c.data.toJSON?.() ?? c.data;
+      const subs = (d.options ?? []).filter((o) => o.type === 1)
+        .map((o) => ({ path: `${d.name} ${o.name}`, name: o.name, description: o.description, open: Boolean(c.open?.includes(o.name)) }));
+      out.push({ path: d.name, description: d.description, module: m.manifest.name, moduleId: m.manifest.id, running: m.running, subs });
+    }
+    return out;
+  }
+
+  commandPaths() { return new Set(this.commandCatalog().flatMap((c) => [c.path, ...c.subs.map((s) => s.path)])); }
 
   // ---- views for the dashboard ---------------------------------------------------------------------------
   #view(m) {

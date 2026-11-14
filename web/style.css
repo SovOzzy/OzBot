@@ -163,12 +163,56 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .pv-line { font-size: 14px; }
 .pv-about { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 14px; }
 .pv-about p { margin: 2px 0 0; white-space: pre-line; }
-.seg { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--border); }
-.seg button { flex: 1; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px 8px; }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
 .imgrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .imgrow img, .imgrow .noimg { flex: none; background: var(--surface-2); object-fit: cover; }
 .imgrow .round { width: 56px; height: 56px; border-radius: 50%; }
 .imgrow .wide { width: 140px; height: 50px; border-radius: 8px; }
 .imgrow .noimg { display: grid; place-items: center; color: var(--muted); font-size: 12px; border: 1px dashed var(--border); }
 .profile .sub form + .field { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+
+.pv-cap { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+.stack-tight > * + * { margin-top: 8px; }
+/* Bot settings: scope headings */
+.jump { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 20px; }
+.jump a { padding: 6px 12px; border-radius: 999px; background: var(--surface-2); color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; }
+.jump a:hover { background: var(--accent-soft); }
+.scope-wrap { margin-top: 28px; padding-top: 16px; border-top: 2px solid var(--border); scroll-margin-top: 80px; }
+.scope { display: flex; gap: 14px; align-items: center; width: 100%; margin: 0 0 16px; padding: 10px 12px; border: 0; border-radius: 14px;
+  background: transparent; text-align: left; cursor: pointer; }
+.scope:hover { background: var(--surface-2); }
+.scope:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.scope[aria-expanded="false"] { margin-bottom: 0; }
+.scope .stxt { flex: 1; min-width: 0; }
+.scope .chev { flex: none; display: grid; place-items: center; width: 36px; height: 36px; color: var(--muted); transform: rotate(-90deg); transition: transform .15s; }
+.scope .chev svg { width: 20px; height: 20px; }
+.scope[aria-expanded="false"] .chev { transform: rotate(180deg); }
+#s-conn { scroll-margin-top: 80px; }
+.scope .sico { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent); }
+.scope .sico svg { width: 24px; height: 24px; }
+.scope h2 { font-size: 22px; }
+.scope p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+/* Command tables */
+.acl-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 0 0 6px; }
+.acl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px 12px; align-items: start; padding: 10px 0; border-top: 1px solid var(--border); }
+.acl-row.sub { padding-left: 20px; border-top-style: dashed; }
+.acl-name { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; min-width: 0; }
+.acl-name .muted { font-size: 13px; flex-basis: 100%; }
+.acl-name code { font-weight: 700; }
+.acl-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.acl-ctl.muted { font-size: 13px; }
+.acl-ctl select { flex: 1 1 180px; width: auto; min-width: 0; }
+.acl-roles { flex-basis: 100%; }
+.secs { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.secs input { width: 90px; }
+@media (max-width: 640px) {
+  .acl-head { display: none; }
+  .acl-row { grid-template-columns: minmax(0, 1fr); }
+  .acl-row.sub { padding-left: 12px; }
+}
+.chip.user { gap: 8px; padding: 4px 6px 4px 4px; cursor: default; }
+button.chip.user { cursor: pointer; padding-right: 12px; }
+.chip.user img { width: 24px; height: 24px; border-radius: 50%; }
+.chip .x { border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1; padding: 0 6px; color: var(--muted); border-radius: 6px; }
+.chip .x:hover { color: var(--bad); }
+.finder { display: flex; gap: 8px; }
+.finder input { flex: 1; min-width: 0; }

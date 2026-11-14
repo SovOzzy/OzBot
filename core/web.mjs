@@ -31,7 +31,7 @@ function imageType(buf) {
   return null;
 }
 
-export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
+export function startWeb({ root, cfg, bot, modules, tts, access, log, version }) {
   const port = Number(process.env.OZBOT_PORT || cfg.port);
   const allowedHosts = new Set([...(cfg.allowedHosts ?? []), `127.0.0.1:${port}`, `localhost:${port}`]);
   const isLocal = (h) => h === `127.0.0.1:${port}` || h === `localhost:${port}`;
@@ -158,6 +158,49 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
       try { await bot.editProfile(m[1], { [m[2]]: value }); } catch (e) { return json(res, 400, { error: e.message }); }
       log(`profile (${m[1]}) ${m[2]} ${value ? 'changed' : 'removed'}`);
       return json(res, 200, await bot.profile());
+    }
+    // ---- command access: everywhere defaults + this server's rules ----
+    const accessView = () => {
+      const g = bot.guild();
+      return { catalog: modules.commandCatalog(), global: access.global(),
+        guild: g ? { id: g.id, name: g.name, config: access.guildConfig(g.id) } : null };
+    };
+    if (p === '/api/access' && method === 'GET') return json(res, 200, accessView());
+    if (p === '/api/access/global' && method === 'PUT') {
+      access.saveGlobal(await readJson(req), modules.commandPaths());
+      log('access (everywhere) saved');
+      return json(res, 200, accessView());
+    }
+    if (p === '/api/access/guild' && method === 'PUT') {
+      const g = bot.guild();
+      if (!g) return json(res, 409, { error: 'OzBot is not in a server yet' });
+      access.saveGuild(g.id, await readJson(req), modules.commandPaths());
+      modules.scheduleCommandSync(); // commands switched off for the server disappear from Discord
+      log(`access (${g.name}) saved`);
+      return json(res, 200, accessView());
+    }
+    // Names for user IDs, or find a user by ID / name in the server: GET /api/access/users?ids=1,2  or  ?q=name
+    if (p === '/api/access/users' && method === 'GET') {
+      if (bot.state !== 'online') return json(res, 200, { users: [] });
+      const view = (u, mem) => ({ id: u.id, name: mem?.displayName ?? u.globalName ?? u.username, username: u.username,
+        avatar: u.displayAvatarURL({ size: 64 }) });
+      const q = (url.searchParams.get('q') ?? '').trim().replace(/^<@!?(\d+)>$/, '$1').replace(/^@/, '');
+      if (q) {
+        if (/^\d{5,25}$/.test(q)) {
+          const u = await bot.client.users.fetch(q).catch(() => null);
+          return json(res, 200, { users: u ? [view(u, bot.guild()?.members.cache.get(u.id))] : [] });
+        }
+        const g = bot.guild();
+        const found = g ? await g.members.search({ query: q.slice(0, 32), limit: 8 }).catch(() => null) : null;
+        return json(res, 200, { users: found ? [...found.values()].map((mem) => view(mem.user, mem)) : [] });
+      }
+      const list = (url.searchParams.get('ids') ?? '').split(',').filter((x) => /^\d{5,25}$/.test(x)).slice(0, 200);
+      const users = [];
+      for (const id of list) {
+        const u = await bot.client.users.fetch(id).catch(() => null);
+        users.push(u ? view(u, bot.guild()?.members.cache.get(id)) : { id, name: `unknown user ${id}`, username: '', avatar: null });
+      }
+      return json(res, 200, { users });
     }
     if ((m = p.match(/^\/api\/modules\/([a-z0-9-]+)$/)) && method === 'GET') {
       const d = await modules.detail(m[1]);

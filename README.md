@@ -43,19 +43,29 @@ deploy/install.sh   # node packages, Python venv with piper-tts, stock voices, s
    bot with the right permissions (read and send messages, connect, speak) plus slash commands.
 4. Back in the dashboard, set **Markov chat** to the channels to learn from, and **Voice chat** to its home voice channel.
 
-### Profile and presence
+### Bot settings
 
-**Bot settings → Profile** changes how OzBot looks, with a live preview:
+The Bot settings page (the cog) is split into three sections. Everywhere and In <server> collapse (click the heading;
+this browser remembers it):
 
-- **In this server only:** nickname, avatar, banner and "about me".
-- **Everywhere:** username (Discord allows about 2 changes an hour), avatar, banner and "about me" (the app
-  description).
+- **Connection:** status, token and the invite link.
+- **Everywhere**, which applies in every server and in DMs:
+  - **Profile:** username (Discord allows about 2 changes an hour), avatar, banner, "about me". Comes with a live preview.
+  - **Presence:** online/idle/do not disturb/invisible, the status line and its style, and whether functions may
+    replace it while busy ("Speaking as Oz").
+  - **Command cooldowns:** a default wait per command and subcommand.
+  - **Ignored users:** OzBot won't answer their commands or learn from their messages.
+- **In <server>**, which applies only in that server:
+  - **Server picker.**
+  - **Profile:** nickname, avatar, banner, "about me".
+  - **Command access:** for each command and subcommand, who can use it (everyone, some roles, admins only, or
+    nobody) and an optional cooldown override. Switched-off commands are removed from Discord's command list.
+  - **Channels:** where commands work (all, only these, all except these).
+  - **Roles:** roles that skip cooldowns, and roles that are ignored.
 
-**Server and presence** sets:
-
-- the online dot: online, idle, do not disturb or invisible
-- the status line and its style (Playing / Listening to / Watching …)
-- whether functions may replace it while busy ("Speaking as Oz")
+Admins (Manage Server) can always use every command and skip cooldowns, apart from commands switched off for the
+server. `/markov forget-me` and `learn-me` are always allowed, so anyone can opt out. Commands that a module marks
+with `open: ['sub']` work the same way. Modules that read messages should skip `ctx.ignored(userId, member)`.
 
 The developer portal is now only needed for the token and the Message Content intent.
 

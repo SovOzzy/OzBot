@@ -6,6 +6,7 @@ import { openStore } from './store.mjs';
 import { Bot } from './bot.mjs';
 import { TTS } from './tts.mjs';
 import { ModuleManager } from './modules.mjs';
+import { Access } from './access.mjs';
 import { startWeb } from './web.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,14 +22,15 @@ process.on('unhandledRejection', (e) => log('unhandled rejection:', e?.stack ?? 
 const store = openStore(dataDir);
 const bot = new Bot({ store, log });
 const tts = new TTS({ root, dataDir, cfg: cfg.tts ?? {}, log });
-const modules = new ModuleManager({ root, dataDir, store, bot, tts, log, cfg });
+const access = new Access({ store, bot, log });
+const modules = new ModuleManager({ root, dataDir, store, bot, tts, log, cfg, access });
 await modules.load();
 modules.attachInteractions();
 bot.on('client', () => modules.attachInteractions()); // new token = new client
 bot.on('ready', () => modules.restartAll());           // (re)connect: modules re-read the server
 bot.on('guilds', () => modules.scheduleCommandSync());
 
-const server = startWeb({ root, cfg, bot, modules, tts, log, version });
+const server = startWeb({ root, cfg, bot, modules, tts, access, log, version });
 await modules.startAll();
 bot.start();
 

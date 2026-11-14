@@ -87,13 +87,6 @@
       ]
     },
     {
-      "key": "voiceChangeRole",
-      "type": "role",
-      "label": "Who can change the voice with /voice set",
-      "help": "Empty = everyone. Server managers can always change it.",
-      "default": ""
-    },
-    {
       "key": "greet",
       "type": "boolean",
       "label": "Say hello on join",
