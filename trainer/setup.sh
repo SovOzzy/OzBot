@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time setup on your PC (Ubuntu on WSL2 with an NVIDIA GPU). Safe to re-run.
 set -euo pipefail
+trap 'echo; echo "Setup was interrupted - it is NOT finished. Run ./setup.sh again (it carries on where it can)."; exit 130' INT
 cd "$(dirname "$0")"
 
 case "$(pwd)" in
@@ -24,7 +25,9 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq build-essential cmake ninja-build python3-venv python3-dev ffmpeg git
 
 echo "== Piper training code (piper1-gpl)"
-if [ ! -d piper1-gpl ]; then git clone --depth 1 https://github.com/OHF-Voice/piper1-gpl.git; fi
+# a clone that was interrupted leaves a folder without pyproject.toml: start that one again
+if [ -d piper1-gpl ] && [ ! -f piper1-gpl/pyproject.toml ]; then echo "Previous download was incomplete, starting it again"; rm -rf piper1-gpl; fi
+if [ ! -d piper1-gpl ]; then git clone --depth 1 --progress https://github.com/OHF-Voice/piper1-gpl.git; fi
 
 echo "== Python environment (.venv) - PyTorch with CUDA is a big download, give it a few minutes"
 [ -d .venv ] || python3 -m venv .venv
@@ -34,7 +37,8 @@ python -m pip install -q -e './piper1-gpl[train]'
 python -m pip install -q faster-whisper
 # build tools piper1-gpl needs for its in-place (dev) build; pip only had them in a temporary build env
 python -m pip install -q scikit-build setuptools wheel cmake ninja cython
-(cd piper1-gpl && ./build_monotonic_align.sh && python setup.py build_ext --inplace >/dev/null)
+echo "== Building Piper's espeak-ng bridge (downloads espeak-ng from GitHub and compiles it: a few minutes, lots of output)"
+(cd piper1-gpl && ./build_monotonic_align.sh && python setup.py build_ext --inplace)
 
 python - <<'PY'
 import torch
@@ -51,4 +55,20 @@ if [ ! -f "$CKPT" ]; then
   mv "$CKPT.part" "$CKPT"
 fi
 echo
-echo "Setup done. Next: put clips in work/<voice>/clips and run ./prepare.sh <voice>"
+echo "== Checking everything works"
+FAIL=0
+ls piper1-gpl/src/piper/espeakbridge*.so >/dev/null 2>&1 || { echo "  ✗ espeak bridge not built"; FAIL=1; }
+python -c "from piper.phonemize_espeak import EspeakPhonemizer as E; E().phonemize('en', 'hello')" 2>/dev/null \
+  && echo "  ✓ pronunciation (espeak-ng) works" || { echo "  ✗ pronunciation (espeak-ng) does not work"; FAIL=1; }
+python -c "from piper.train.vits.monotonic_align import maximum_path" 2>/dev/null \
+  && echo "  ✓ training extension built" || { echo "  ✗ training extension (monotonic_align) missing"; FAIL=1; }
+python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)" \
+  && echo "  ✓ GPU available to PyTorch" || { echo "  ✗ PyTorch cannot see the GPU"; FAIL=1; }
+[ -f "$CKPT" ] && echo "  ✓ base checkpoint downloaded" || { echo "  ✗ base checkpoint missing"; FAIL=1; }
+python -c "import faster_whisper" 2>/dev/null && echo "  ✓ Whisper installed" || echo "  - Whisper missing (only needed for prepare.sh)"
+echo
+if [ "$FAIL" = 1 ]; then
+  echo "Setup is NOT complete (see ✗ above). To rebuild Piper from scratch: rm -rf piper1-gpl/_skbuild && ./setup.sh"
+  exit 1
+fi
+echo "Setup done. Next: ./import.sh <voice> <zip from the dashboard>   (or clips + ./prepare.sh <voice>)"
