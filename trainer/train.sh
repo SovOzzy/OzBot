@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # Fine-tune a Piper voice from the Lessac checkpoint on work/<voice>/dataset.
-# Usage: ./train.sh <voice> [epochs]       (Ctrl+C stops; run again to resume from the last checkpoint)
+# Usage: ./train.sh <voice> [epochs] [--fresh]
+#   Ctrl+C stops; running it again resumes from the last checkpoint.
+#   --fresh: start over (clears work/<voice>/train + cache). Use it after adding recordings with import.sh --append,
+#            so the new clips get a full training run instead of a finished, low learning rate.
 # Env:   ESPEAK=en (accent for pronunciation: en = British, en-gb-x-rp = southern/RP, en-gb-scotland, en-us ...)
 #        BATCH=16 (lower to 8 if you run out of GPU memory, raise to 32 on 24 GB cards)
 set -euo pipefail
 cd "$(dirname "$0")"
-VOICE="${1:?Usage: ./train.sh <voice-name> [epochs]}"
-EPOCHS="${2:-2000}"
+FRESH=0; POS=()
+for a in "$@"; do if [ "$a" = "--fresh" ]; then FRESH=1; else POS+=("$a"); fi; done
+VOICE="${POS[0]:?Usage: ./train.sh <voice-name> [epochs] [--fresh]}"
+EPOCHS="${POS[1]:-2000}"
 ESPEAK="${ESPEAK:-en}"
 BATCH="${BATCH:-16}"
 W="work/$VOICE"
 [ -f "$W/dataset/metadata.csv" ] || { echo "Run ./prepare.sh $VOICE first"; exit 1; }
+if [ "$FRESH" = 1 ] && [ -d "$W/train" -o -d "$W/cache" ]; then
+  echo "--fresh: removing the previous run ($W/train) and preprocessed cache ($W/cache). Exported voices in output/ are kept."
+  rm -rf "$W/train" "$W/cache"
+fi
+echo "Dataset: $(grep -c . "$W/dataset/metadata.csv") clips"
 . .venv/bin/activate
 # check the accent name now, not 10 minutes into preprocessing
 python - "$ESPEAK" <<'PY' || exit 1

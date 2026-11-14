@@ -63,9 +63,9 @@ def main() -> None:
     meta.write_text("\n".join(rows) + "\n", encoding="utf-8")
     seconds = sum((p.stat().st_size - 44) / 44100 for p in wavs.glob("*.wav"))
     print(f"\nDataset: {len(rows)} clips, {seconds / 60:.1f} minutes in {out}")
-    print(f"Next: ./train.sh {args.voice}")
+    print(f"Next: ./train.sh {args.voice} --fresh" if args.append else f"Next: ./train.sh {args.voice}")
     if seconds < 300:
-        print("Tip: under 5 minutes works, but recording another session (--append) will sound better.")
+        print("Tip: under 5 minutes works, but recording another prompt set (--append) will sound better.")
 
 
 if __name__ == "__main__":

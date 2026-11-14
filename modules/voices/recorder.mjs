@@ -9,13 +9,14 @@ import { randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { writeZip } from '../../core/zip.mjs';
 
-const PROMPTS = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'prompts.json'), 'utf8'));
+const SETS = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'prompts.json'), 'utf8')).sets;
 const MAX_AGE = 12 * 3600e3;
 const MAX_CLIP = 4e6;          // ~90 s at 22.05 kHz 16-bit mono
 const SESSION = /^[0-9a-f-]{36}$/;
 const httpError = (code, msg) => Object.assign(new Error(msg), { code });
 
 const root = (ctx) => join(ctx.tts.voiceDir, '..', 'recordings');
+const zipName = (m) => `ozbot-voice-${m.voice}-set${m.set ?? 1}.zip`;
 const clipName = (i) => `utt${String(i + 1).padStart(5, '0')}.wav`;
 
 function dir(ctx, session) {
@@ -45,18 +46,19 @@ async function clipInfo(d) {
 }
 
 export const recorderRoutes = {
-  'GET rec-prompts': { always: true, fn: () => ({ prompts: PROMPTS }) },
+  'GET rec-sets': { always: true, fn: () => ({ sets: SETS.map((x) => ({ id: x.id, name: x.name, count: x.prompts.length })) }) },
 
   'POST rec-start': { always: true, fn: async (ctx, { body }) => {
     await cleanupRecordings(ctx);
     const voice = String(body.voice ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
     if (!voice) throw httpError(400, 'Give the voice a short name (letters, numbers, _)');
+    const set = SETS.find((x) => x.id === Number(body.set)) ?? SETS[0];
     const session = randomUUID();
     const d = join(root(ctx), session);
     await mkdir(d, { recursive: true });
-    await writeFile(join(d, 'meta.json'), JSON.stringify({ voice, created: Date.now(), prompts: PROMPTS }));
-    ctx.log(`recording session started for "${voice}"`);
-    return { session, voice, prompts: PROMPTS };
+    await writeFile(join(d, 'meta.json'), JSON.stringify({ voice, set: set.id, created: Date.now(), prompts: set.prompts }));
+    ctx.log(`recording session started for "${voice}" (set ${set.id})`);
+    return { session, voice, set: set.id, setName: set.name, prompts: set.prompts };
   } },
 
   'GET rec-status': { always: true, fn: async (ctx, { query }) => {
@@ -68,7 +70,8 @@ export const recorderRoutes = {
   'PUT rec-clip': { always: true, raw: true, fn: async (ctx, { req, query }) => {
     const d = dir(ctx, query.session);
     const i = Number(query.index);
-    if (!Number.isInteger(i) || i < 0 || i >= PROMPTS.length) throw httpError(400, 'Bad prompt number');
+    const { prompts } = await meta(d);
+    if (!Number.isInteger(i) || i < 0 || i >= prompts.length) throw httpError(400, 'Bad prompt number');
     const tmp = join(d, `.part-${i}`);
     let size = 0;
     const guard = async function* (src) { for await (const c of src) { size += c.length; if (size > MAX_CLIP) throw httpError(413, 'Clip too long'); yield c; } };
@@ -91,9 +94,11 @@ export const recorderRoutes = {
     if (indexes.length < 10) throw httpError(400, 'Record at least 10 sentences first');
     const lines = indexes.map((i) => `${clipName(i)}|${m.prompts[i]}`);
     const readme = [
-      `OzBot voice recordings: "${m.voice}", ${indexes.length} sentences, about ${Math.round(seconds / 60)} min.`,
+      `OzBot voice recordings: "${m.voice}", prompt set ${m.set ?? 1}, ${indexes.length} sentences, about ${Math.round(seconds / 60)} min.`,
       '', 'On your PC (WSL), from the OzBot trainer folder:',
-      `  ./import.sh ${m.voice} /path/to/this.zip`, `  ./train.sh ${m.voice}`, `  ./export.sh ${m.voice}`, '',
+      `  ./import.sh ${m.voice} /path/to/this.zip              (first session)`,
+      `  ./import.sh ${m.voice} /path/to/this.zip --append     (adding to earlier sessions)`,
+      `  ./train.sh ${m.voice}          (add --fresh after --append, to retrain on all sets)`, `  ./export.sh ${m.voice}`, '',
       'dataset/metadata.csv = file|text (already matches what was read, so no Whisper step is needed).', '',
     ].join('\n');
     await writeZip(`${d}.zip`, [
@@ -103,14 +108,14 @@ export const recorderRoutes = {
     ]);
     const size = (await stat(`${d}.zip`)).size;
     ctx.log(`recording "${m.voice}" packed: ${indexes.length} clips, ${(size / 1e6).toFixed(1)} MB`);
-    return { ok: true, clips: indexes.length, seconds, sizeMB: +(size / 1e6).toFixed(1), download: `ozbot-voice-${m.voice}.zip` };
+    return { ok: true, clips: indexes.length, seconds, sizeMB: +(size / 1e6).toFixed(1), download: zipName(m) };
   } },
 
   'GET rec-download': { always: true, fn: async (ctx, { query }) => {
     const d = dir(ctx, query.session);
     const m = await meta(d);
     if (!existsSync(`${d}.zip`)) throw httpError(404, 'Press Finish first');
-    return { file: `${d}.zip`, type: 'application/zip', downloadName: `ozbot-voice-${m.voice}.zip` };
+    return { file: `${d}.zip`, type: 'application/zip', downloadName: zipName(m) };
   } },
 
   // Called on leaving the page (navigator.sendBeacon) or by the Delete button.

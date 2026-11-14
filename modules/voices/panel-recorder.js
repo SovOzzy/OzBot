@@ -54,22 +54,43 @@ export function mountRecorder(el, api) {
   }
 
   // ---------------------------------------------------------------- start screen
-  function drawStart() {
+  // Which sets were already recorded for a voice name, remembered in this browser only (a convenience, not storage).
+  const DONE_KEY = 'ozbot.rec.done';
+  const doneSets = (voice) => { try { return JSON.parse(localStorage.getItem(DONE_KEY) || '{}')[voice] ?? []; } catch { return []; } };
+  const markDone = (voice, set) => {
+    try { const all = JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); all[voice] = [...new Set([...(all[voice] ?? []), set])]; localStorage.setItem(DONE_KEY, JSON.stringify(all)); } catch {}
+  };
+
+  async function drawStart() {
+    let sets = [];
+    try { sets = (await api.get('rec-sets')).sets; } catch (e) { toast(e.message, 'bad'); }
     const name = h('input', { type: 'text', id: 'rec-name', maxlength: 30, placeholder: 'e.g. oz', autocomplete: 'off' });
     const go = h('button', { class: 'btn primary', type: 'submit' }, '🎙️ Start recording');
+    const setBox = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Prompt set' });
+    const drawSets = () => {
+      const voice = name.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const done = doneSets(voice);
+      const current = setBox.querySelector('input:checked')?.value;
+      const firstTodo = sets.find((x) => !done.includes(x.id))?.id ?? sets[0]?.id;
+      setBox.replaceChildren(...sets.map((x) => h('label', { class: 'chip' },
+        h('input', { type: 'radio', name: 'rec-set', value: x.id, checked: String(current ?? firstTodo) === String(x.id) }),
+        x.name, done.includes(x.id) ? h('small', {}, ' ✓ recorded') : '')));
+    };
+    name.addEventListener('input', () => { setBox.querySelector('input:checked') && (setBox.querySelector('input:checked').checked = false); drawSets(); });
     card.replaceChildren(
       h('h2', {}, 'Record a voice for training'),
       h('p', { class: 'muted', style: 'margin-top:0' },
         'Read sentences out loud in your browser. At the end you download a zip that the trainer on your PC can use straight away (', h('code', {}, './import.sh'), '). '
-        + 'There are 100 sentences, about 8-10 minutes of speech. More is better, but you can finish after 10.'),
+        + 'Each set is 100 different sentences, about 8-10 minutes of speech. You can finish a set after 10. More sets mean a better voice: add them with ', h('code', {}, '--append'), '.'),
       h('ul', { class: 'muted', style: 'margin:0 0 14px;padding-left:20px' },
-        h('li', {}, 'Quiet room, no music or TV. Use the same microphone all the way through, about a hand’s width away.'),
+        h('li', {}, 'Quiet room, no music or TV. Use the same microphone and distance (about a hand’s width) for every set.'),
         h('li', {}, 'Talk the way you want the bot to sound: relaxed and natural, not like you’re reading.'),
         h('li', {}, 'Only record voices you have permission to use (your own, or a friend who said yes).')),
       h('form', { onsubmit: async (e) => {
         e.preventDefault(); go.disabled = true;
         try {
-          const r = await api.post('rec-start', { voice: name.value });
+          const set = Number(setBox.querySelector('input:checked')?.value ?? 1);
+          const r = await api.post('rec-start', { voice: name.value, set });
           S = { ...r, done: new Set(), i: 0, finished: false, downloaded: false };
           drawSession();
           await startAudio();
@@ -77,8 +98,11 @@ export function mountRecorder(el, api) {
         go.disabled = false;
       } },
       h('div', { class: 'field', style: 'padding:0;border:0' }, h('label', { for: 'rec-name' }, 'Voice name'),
-        h('p', { class: 'help' }, 'Short, letters/numbers/_ only. This becomes the folder name in the trainer.'), name),
+        h('p', { class: 'help' }, 'Short, letters/numbers/_ only, and the same name for every set of the same voice.'), name),
+      h('div', { class: 'field', style: 'border:0;padding-bottom:0' }, h('span', { class: 'lbl' }, 'Sentences'),
+        h('p', { class: 'help' }, '✓ = already recorded in this browser for that voice name.'), setBox),
       h('div', { class: 'actions' }, go)));
+    drawSets();
   }
 
   // ---------------------------------------------------------------- microphone
@@ -148,7 +172,7 @@ export function mountRecorder(el, api) {
     ui.result = h('div');
     const dev = h('select', { id: 'rec-dev', 'aria-label': 'Microphone', style: 'max-width:320px', onchange: (e) => startAudio(e.target.value) });
     card.replaceChildren(
-      h('div', { class: 'rec-top' }, h('h2', { style: 'margin:0' }, `Recording “${S.voice}”`), h('span', {}, ui.count, ' ', ui.time)),
+      h('div', { class: 'rec-top' }, h('h2', { style: 'margin:0' }, `Recording “${S.voice}” · set ${S.set}`), h('span', {}, ui.count, ' ', ui.time)),
       ui.prompt, ui.next,
       h('div', { class: 'actions' }, ui.rec, ui.play, ui.prev, ui.skip),
       h('div', { class: 'actions', style: 'margin-top:12px' }, h('div', { class: 'rec-meter', style: 'flex:1;min-width:160px' }, h('i')), dev,
@@ -248,7 +272,8 @@ export function mountRecorder(el, api) {
     setMsg('Packing the zip…', '');
     try {
       const r = await api.post('rec-finish', { session: S.session });
-      S.finished = true; S.sizeMB = r.sizeMB;
+      S.finished = true; S.sizeMB = r.sizeMB; S.download = r.download;
+      markDone(S.voice, S.set);
       setMsg('', '');
       const link = h('a', { class: 'btn primary rec-big', href: `/api/m/voices/rec-download?session=${S.session}`, download: r.download,
         onclick: () => { S.downloaded = true; setTimeout(drawDownloaded, 400); } }, `⬇ Download ${r.download} (${r.sizeMB} MB)`);
@@ -261,12 +286,19 @@ export function mountRecorder(el, api) {
   }
 
   function drawDownloaded() {
+    const first = !doneSets(S.voice).some((x) => x !== S.set);
+    const cmds = first
+      ? `./import.sh ${S.voice} ~/Downloads/${S.download}\n./train.sh ${S.voice}\n./export.sh ${S.voice}`
+      : `./import.sh ${S.voice} ~/Downloads/${S.download} --append\n./train.sh ${S.voice} --fresh\n./export.sh ${S.voice}`;
     ui.result.replaceChildren(h('div', { class: 'banner info', style: 'margin-top:16px' },
       h('p', { style: 'margin:0 0 6px;font-weight:600' }, '✓ Downloaded. Next, on your PC (WSL, in the trainer folder):'),
-      h('pre', { style: 'margin:0 0 10px;white-space:pre-wrap' }, `./import.sh ${S.voice} ~/Downloads/ozbot-voice-${S.voice}.zip\n./train.sh ${S.voice}\n./export.sh ${S.voice}`),
+      h('pre', { style: 'margin:0 0 6px;white-space:pre-wrap' }, cmds),
+      h('p', { class: 'muted', style: 'margin:0 0 10px' }, first
+        ? 'Recording another set later? Import it with --append and train with --fresh.'
+        : 'Adding to a voice you trained before: --append keeps the earlier sets, --fresh retrains on all of them.'),
       h('p', { class: 'muted', style: 'margin:0 0 10px' }, 'The copy on the server is deleted when you leave this page, or now:'),
       h('div', { class: 'actions', style: 'margin:0' },
-        h('a', { class: 'btn', href: `/api/m/voices/rec-download?session=${S.session}`, download: `ozbot-voice-${S.voice}.zip` }, 'Download again'),
+        h('a', { class: 'btn', href: `/api/m/voices/rec-download?session=${S.session}`, download: S.download }, 'Download again'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => { discard(false); toast('Deleted from the server'); drawStart(); } }, 'Done, delete it from the server'))));
   }
 

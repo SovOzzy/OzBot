@@ -22,16 +22,29 @@ Lessac base checkpoint (~850 MB) that every voice is fine-tuned from. It takes a
 
 ## 2a. Record in the dashboard (easiest)
 
-On the OzBot dashboard, open **Voice profiles** and use **Record a voice for training**. Read the sentences it shows
-(Space starts and stops each one), then press **Finish & make zip** and download it. You don't need Whisper or
-transcript fixing for this, because the zip already contains the exact text of every clip:
+On the OzBot dashboard, open **Voice profiles** and use **Record a voice for training**. Choose a **prompt set** (there
+are 3 sets of 100 different sentences), read the sentences (Space starts and stops each one), then press **Finish & make
+zip** and download it. You don't need Whisper or transcript fixing for this, because the zip already contains the exact
+text of every clip:
 
 ```bash
-./import.sh <voice> ~/Downloads/ozbot-voice-<voice>.zip            # or /mnt/c/Users/<you>/Downloads/...
-./import.sh <voice> second-session.zip --append                     # add another session later
+./import.sh <voice> ~/Downloads/ozbot-voice-<voice>-set1.zip     # first set (or /mnt/c/Users/<you>/Downloads/...)
+./train.sh <voice>
+./export.sh <voice>
 ```
 
-Then skip to step 4. The server deletes its copy once you leave the page (it warns you first).
+**Adding more sets later** (more audio gives a better voice: ~3.5 min works, ~10 min is clearly better, 15-30 min is the
+sweet spot):
+
+```bash
+./import.sh <voice> ~/Downloads/ozbot-voice-<voice>-set2.zip --append   # adds to the existing dataset
+./train.sh <voice> --fresh                                               # retrain on everything, from the start
+./export.sh <voice>                                                      # new .onnx to upload (same name replaces the old one)
+```
+
+Use `--fresh` after appending: a finished run's learning rate has already wound down, so continuing it would barely
+learn from the new clips. Use the same voice name, microphone and distance for every set. Then skip to step 5.
+The server deletes its copy of the recording once you leave the page (it warns you first).
 
 ## 2b. …or collect clips you already have
 
@@ -65,6 +78,7 @@ Options: `./prepare.sh <voice> --model medium` (faster Whisper, slightly worse),
 
 ```bash
 ./train.sh <voice>              # 2000 epochs (the recommended fine-tune length)
+./train.sh <voice> --fresh      # start over (after adding recordings with --append)
 ./train.sh <voice> 1000         # shorter test run
 ESPEAK=en-gb-x-rp ./train.sh <voice> # accent for pronunciation: en (British, default), en-gb-x-rp (southern/RP),
                                      # en-gb-scotland, en-us ...
