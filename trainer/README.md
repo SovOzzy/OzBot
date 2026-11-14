@@ -9,7 +9,8 @@ Training needs a GPU; the VPS only *uses* the finished voice (about 60 MB, ~250 
 ## 1. Set up (once)
 
 Copy this `trainer/` folder into your WSL home (e.g. `~/OzBot/trainer`), **not** onto `/mnt/c/...`: the Windows drive
-is very slow from WSL. Then:
+is very slow from WSL. **The path must not contain spaces** (`~/OzBot-Training` is fine, `~/OzBot - Training` is not):
+Piper's build breaks on them. Then:
 
 ```bash
 cd ~/OzBot/trainer

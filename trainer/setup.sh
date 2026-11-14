@@ -3,6 +3,15 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+case "$(pwd)" in
+  *" "*)
+    BAD="$(pwd)"; while [[ "$(basename "$BAD")" != *" "* ]]; do BAD="$(dirname "$BAD")"; done
+    echo "This folder's path has a space in it: $(pwd)"
+    echo "Piper's build (espeak-ng) breaks on spaces. Rename the folder, e.g.:"
+    echo "  mv \"$BAD\" \"$(dirname "$BAD")/$(basename "$BAD" | tr -s ' ' | tr ' ' '_' | sed 's/_-_/-/g')\""
+    exit 1 ;;
+esac
+
 echo "== Checking the GPU is visible inside WSL"
 if ! command -v nvidia-smi >/dev/null || ! nvidia-smi >/dev/null 2>&1; then
   echo "nvidia-smi does not work in WSL. Install/update the NVIDIA driver on WINDOWS (not inside WSL), then 'wsl --shutdown' and retry."
@@ -23,6 +32,8 @@ echo "== Python environment (.venv) - PyTorch with CUDA is a big download, give 
 python -m pip install -q --upgrade pip wheel setuptools
 python -m pip install -q -e './piper1-gpl[train]'
 python -m pip install -q faster-whisper
+# build tools piper1-gpl needs for its in-place (dev) build; pip only had them in a temporary build env
+python -m pip install -q scikit-build setuptools wheel cmake ninja cython
 (cd piper1-gpl && ./build_monotonic_align.sh && python setup.py build_ext --inplace >/dev/null)
 
 python - <<'PY'
