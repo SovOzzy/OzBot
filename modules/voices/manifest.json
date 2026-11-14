@@ -1,7 +1,7 @@
 {
   "id": "voices",
   "name": "Voice profiles",
-  "description": "Your library of voices: the stock ones plus any you train on your PC with the trainer folder.\nUpload the .onnx + .onnx.json pair here, give it a name, tune speed and expression, and preview it.",
+  "description": "Your library of voices: the stock ones plus any you train yourself, tuned and previewed here.\nRecord training clips with your mic on this page, train them on your PC, then upload the .onnx + .onnx.json.",
   "icon": "wave",
   "order": 30,
   "provides": ["voices"],

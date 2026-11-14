@@ -100,7 +100,7 @@ export class Bot extends EventEmitter {
     const id = this.client.user?.id ?? this.store.get('core:appId', '');
     if (!id) return null;
     const perms = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ReadMessageHistory
-      | PermissionFlagsBits.Connect | PermissionFlagsBits.Speak | PermissionFlagsBits.UseVoiceActivity;
+      | PermissionFlagsBits.Connect | PermissionFlagsBits.Speak | PermissionFlagsBits.UseVAD;
     return `https://discord.com/oauth2/authorize?client_id=${id}&scope=bot%20applications.commands&permissions=${perms}`;
   }
 

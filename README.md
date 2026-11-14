@@ -9,7 +9,7 @@ core/       Discord client, module system, settings store (SQLite), TTS manager,
 modules/    one folder per function (manifest.json + index.mjs + optional panel.js)
   markov/   learns from chosen channels, makes sentences, /markov
   voice/    joins voice, speaks random sentences on a timer, /join /leave /say /speak
-  voices/   voice library: upload .onnx voices, name/tune/preview them
+  voices/   voice library: record training clips in the browser, upload .onnx voices, name/tune/preview them
 web/        dashboard (no build step)
 tts/        Piper worker (Python), started on demand, stopped when idle
 trainer/    run on your PC (WSL + NVIDIA) to train new voices; see trainer/README.md

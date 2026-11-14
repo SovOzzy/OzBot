@@ -5,6 +5,7 @@ import { rename, unlink, open, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
+import { recorderRoutes, cleanupRecordings } from './recorder.mjs';
 
 const KEY = 'voices:profiles';
 const NAME = /^[A-Za-z0-9_.-]{1,120}$/;
@@ -85,6 +86,8 @@ async function receiveUpload(ctx, req, file) {
 export default {
   async start(ctx) {
     await loadConfigs(ctx);
+    await cleanupRecordings(ctx);
+    ctx.every(3600e3, () => cleanupRecordings(ctx));
     ctx.provide('voices', {
       list: () => list(ctx),
       resolve: (id) => resolve(ctx, id),
@@ -95,6 +98,7 @@ export default {
   async settingsChanged() {},
 
   routes: {
+    ...recorderRoutes,
     'GET list': { always: true, fn: (ctx) => ({ voices: list(ctx), default: ctx.settings.defaultVoice }) },
     'PUT profile': { always: true, fn: (ctx, { body }) => {
       const id = String(body.id ?? '');

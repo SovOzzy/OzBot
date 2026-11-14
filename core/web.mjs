@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { join, extname } from 'node:path';
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.wav': 'audio/wav' };
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.wav': 'audio/wav', '.zip': 'application/zip' };
 
 const CORE_FIELDS = [
   { key: 'guildId', type: 'select', label: 'Server', help: 'The Discord server OzBot works in.', options: [] },
@@ -46,10 +46,12 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw Object.assign(new Error('Bad JSON'), { code: 400 }); }
   }
 
-  async function sendFile(res, path, { remove = false, type } = {}) {
+  async function sendFile(res, path, { remove = false, type, downloadName } = {}) {
     try {
       const st = await stat(path);
-      res.writeHead(200, { 'content-type': type ?? TYPES[extname(path)] ?? 'application/octet-stream', 'content-length': st.size, 'cache-control': 'no-store' });
+      const headers = { 'content-type': type ?? TYPES[extname(path)] ?? 'application/octet-stream', 'content-length': st.size, 'cache-control': 'no-store' };
+      if (downloadName) headers['content-disposition'] = `attachment; filename="${String(downloadName).replace(/[^\w.-]/g, '_')}"`;
+      res.writeHead(200, headers);
       const s = createReadStream(path);
       s.pipe(res);
       if (remove) s.on('close', () => unlink(path).catch(() => {}));
@@ -117,7 +119,7 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
       return json(res, 200, await modules.detail(m[1]));
     }
     // Module's own endpoints: /api/m/<id>/<name>. Route = async (ctx, { query, body, req }) => result
-    // or { fn, raw?: true (unparsed request, for uploads), always?: true (works while the module is off) }. Result { file, remove, type } streams a file.
+    // or { fn, raw?: true (unparsed request, for uploads), always?: true (works while the module is off) }. Result { file, remove, type, downloadName } streams a file.
     if ((m = p.match(/^\/api\/m\/([a-z0-9-]+)\/([a-z0-9-]+)$/))) {
       const mod = modules.get(m[1]);
       const route = mod?.impl.routes?.[`${method} ${m[2]}`];
@@ -148,9 +150,10 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
         return await api(req, res, url);
       }
       let m;
-      if ((m = url.pathname.match(/^\/modules\/([a-z0-9-]+)\/panel\.js$/))) {
+      // panel.js plus any panel-*.js helpers it imports
+      if ((m = url.pathname.match(/^\/modules\/([a-z0-9-]+)\/(panel(?:-[a-z0-9-]+)?\.js)$/))) {
         const mod = modules.get(m[1]);
-        return mod?.hasPanel ? sendFile(res, join(mod.dir, 'panel.js')) : json(res, 404, { error: 'No panel' });
+        return mod?.hasPanel ? sendFile(res, join(mod.dir, m[2])) : json(res, 404, { error: 'No panel' });
       }
       const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
       if (!/^[a-z0-9_-]+\.(html|js|css|svg|png|ico)$/i.test(file)) return json(res, 404, { error: 'Not found' });

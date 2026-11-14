@@ -247,6 +247,8 @@ async function pageModule(id) {
     voices: () => loadVoices(true),
     get module() { return d; },
     onUpdate(fn) { listeners.add(fn); },
+    // warn(): message to show before leaving (or null = nothing to lose); leave(): runs once the user has left
+    guardLeave(warn, leave) { leaveGuards.push({ warn, leave }); },
     emit() { for (const fn of listeners) { try { fn(d); } catch (e) { console.error(e); } } },
     async refresh() { d = await call('GET', `/api/modules/${id}`); drawHead(); panelApi.emit(); },
   };
@@ -278,7 +280,11 @@ async function pageBot() {
   app.replaceChildren(h('a', { class: 'back', href: '#/', html: ICONS.back + ' All functions' }),
     h('div', { class: 'mhead' }, h('div', { class: 'ico', html: ICONS.cog }), h('div', { class: 'txt' }, h('h1', {}, 'Bot settings'),
       h('p', {}, 'Connection to Discord, which server OzBot works in and how it shows up there.'))),
-    h('div', { class: 'cols' }, info, tokenCard), h('div', { style: 'height:16px' }), settings);
+    h('div', { class: 'cols' }, info, tokenCard), h('div', { style: 'height:16px' }), settings,
+    h('section', { class: 'card' }, h('h2', {}, 'Channels and function settings'),
+      h('p', { class: 'muted', style: 'margin-top:0' }, 'Each function keeps its own settings (which channels to read, which voice channel to sit in…) on its own page:'),
+      h('div', { class: 'actions', style: 'margin-top:0' }, ...(state?.modules ?? []).map((m) =>
+        h('a', { class: 'btn', href: `#/m/${m.id}` }, h('span', { html: ICONS[m.icon] ?? ICONS.puzzle, style: 'width:18px;height:18px;display:inline-flex' }), m.name)))));
 
   const drawInfo = () => {
     const b = state?.bot ?? core.bot;
@@ -316,7 +322,26 @@ async function pageBot() {
 }
 
 // ---- router --------------------------------------------------------------------------------------------
+let leaveGuards = [];
+let currentHash = location.hash || '#/';
+let ignoreHash = false;
+
+function pendingLeaveMessage() {
+  for (const g of leaveGuards) { const m = g.warn?.(); if (m) return m; }
+  return null;
+}
+function runLeave() {
+  for (const g of leaveGuards.splice(0)) { try { g.leave?.(); } catch (e) { console.error(e); } }
+}
+window.addEventListener('beforeunload', (e) => { if (pendingLeaveMessage()) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('pagehide', (e) => { if (!e.persisted) runLeave(); });
+
 async function route() {
+  if (ignoreHash) { ignoreHash = false; return; }
+  const msg = pendingLeaveMessage();
+  if (msg && !confirm(msg)) { ignoreHash = true; location.hash = currentHash; return; }
+  runLeave();
+  currentHash = location.hash || '#/';
   pageRefresh = null;
   const hash = location.hash || '#/';
   let m;

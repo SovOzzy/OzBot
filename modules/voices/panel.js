@@ -1,4 +1,6 @@
-// Voice profiles page: upload .onnx + .onnx.json, list voices, tune, preview, delete.
+// Voice profiles page: record training clips, upload .onnx + .onnx.json, list voices, tune, preview, delete.
+import { mountRecorder } from './panel-recorder.js';
+
 export async function render(el, api) {
   const { h, toast } = api;
   const listBox = h('div');
@@ -41,7 +43,9 @@ export async function render(el, api) {
     setTimeout(() => upProgress.replaceChildren(), 8000);
   }
 
-  el.append(h('section', { class: 'card' }, h('h2', {}, 'Add a voice'), drop, fileInput, upProgress),
+  const recBox = h('div');
+  mountRecorder(recBox, api);
+  el.append(recBox, h('section', { class: 'card' }, h('h2', {}, 'Add a trained voice'), drop, fileInput, upProgress),
     h('section', { class: 'card' }, h('h2', {}, 'Installed voices'), listBox));
 
   async function draw() {

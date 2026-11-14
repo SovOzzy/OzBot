@@ -19,7 +19,20 @@ cd ~/OzBot/trainer
 It checks the GPU, installs build tools + ffmpeg, the Piper training code, PyTorch, Whisper, and downloads the
 Lessac base checkpoint (~850 MB) that every voice is fine-tuned from. It takes about 10-20 minutes.
 
-## 2. Collect clips
+## 2a. Record in the dashboard (easiest)
+
+On the OzBot dashboard, open **Voice profiles** and use **Record a voice for training**. Read the sentences it shows
+(Space starts and stops each one), then press **Finish & make zip** and download it. You don't need Whisper or
+transcript fixing for this, because the zip already contains the exact text of every clip:
+
+```bash
+./import.sh <voice> ~/Downloads/ozbot-voice-<voice>.zip            # or /mnt/c/Users/<you>/Downloads/...
+./import.sh <voice> second-session.zip --append                     # add another session later
+```
+
+Then skip to step 4. The server deletes its copy once you leave the page (it warns you first).
+
+## 2b. …or collect clips you already have
 
 ```
 work/<voice>/clips/      <- put audio here (wav, mp3, m4a, ogg, flac, even mp4)
@@ -87,6 +100,7 @@ You can export at any point, even halfway through training, to hear how it's goi
 | File | What it does |
 |---|---|
 | `setup.sh` | One-time install: venv, piper1-gpl `[train]`, faster-whisper, base checkpoint |
+| `import.py` / `import.sh` | Dashboard recording zip(s) become `work/<voice>/dataset` (no Whisper) |
 | `prepare.py` / `prepare.sh` | clips, then Whisper transcripts, then the cut 22,050 Hz dataset and `metadata.csv` |
 | `train.sh` | Fine-tune (warm start from Lessac medium; resumes automatically) |
 | `export.sh` | Newest checkpoint to `.onnx` + `.onnx.json`, plus a test sentence |
