@@ -43,6 +43,22 @@ deploy/install.sh   # node packages, Python venv with piper-tts, stock voices, s
    bot with the right permissions (read and send messages, connect, speak) plus slash commands.
 4. Back in the dashboard, set **Markov chat** to the channels to learn from, and **Voice chat** to its home voice channel.
 
+### Profile and presence
+
+**Bot settings → Profile** changes how OzBot looks, with a live preview:
+
+- **In this server only:** nickname, avatar, banner and "about me".
+- **Everywhere:** username (Discord allows about 2 changes an hour), avatar, banner and "about me" (the app
+  description).
+
+**Server and presence** sets:
+
+- the online dot: online, idle, do not disturb or invisible
+- the status line and its style (Playing / Listening to / Watching …)
+- whether functions may replace it while busy ("Speaking as Oz")
+
+The developer portal is now only needed for the token and the Message Content intent.
+
 ## Resource use (2 vCPU ARM, shared with Gildesk Studio and OzAds)
 
 | Part | Memory | CPU |

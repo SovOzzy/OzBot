@@ -281,11 +281,12 @@ async function pageBot() {
   const core = await call('GET', '/api/core');
   const info = h('section', { class: 'card' });
   const tokenCard = h('section', { class: 'card' }, h('h2', {}, 'Discord token'));
-  const settings = h('section', { class: 'card' }, h('h2', {}, 'Bot'));
+  const settings = h('section', { class: 'card' }, h('h2', {}, 'Server and presence'));
+  const profile = profileCard();
   app.replaceChildren(h('a', { class: 'back', href: '#/', html: ICONS.back + ' All functions' }),
     h('div', { class: 'mhead' }, h('div', { class: 'ico', html: ICONS.cog }), h('div', { class: 'txt' }, h('h1', {}, 'Bot settings'),
       h('p', {}, 'Connection to Discord, which server OzBot works in and how it shows up there.'))),
-    h('div', { class: 'cols' }, info, tokenCard), h('div', { style: 'height:16px' }), settings,
+    h('div', { class: 'cols' }, info, tokenCard), h('div', { style: 'height:16px' }), profile.el, settings,
     h('section', { class: 'card' }, h('h2', {}, 'Channels and function settings'),
       h('p', { class: 'muted', style: 'margin-top:0' }, 'Each function keeps its own settings (which channels to read, which voice channel to sit in…) on its own page:'),
       h('div', { class: 'actions', style: 'margin-top:0' }, ...(state?.modules ?? []).map((m) =>
@@ -322,8 +323,114 @@ async function pageBot() {
     h('div', { class: 'actions' }, btn)));
 
   settings.append(await settingsForm(core.fields, core.settings, async (body) => {
-    await call('PUT', '/api/core', body); await poll(); guild = null;
+    await call('PUT', '/api/core', body); await poll(); guild = null; profile.load();
   }));
+}
+
+// ---- Profile card: preview + this-server and everywhere editors -------------------------------------------
+const ACT_PREFIX = { custom: '', playing: 'Playing ', listening: 'Listening to ', watching: 'Watching ', competing: 'Competing in ' };
+const DOT = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', invisible: 'Invisible' };
+
+function profileCard() {
+  const el = h('section', { class: 'card' }, h('h2', {}, 'Profile'));
+  const body = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+  el.append(body);
+  let p = null;
+  let view = 'server';
+
+  const preview = () => {
+    const s = view === 'server' && p.server ? p.server : null;
+    const g = p.global;
+    const avatar = s?.avatar || g.avatar;
+    const banner = s?.banner || g.banner;
+    const pr = p.presence;
+    const line = pr.text ? `${ACT_PREFIX[pr.type] ?? ''}${pr.text}` : '';
+    const about = s ? (s.bio || g.about) : g.about;
+    return h('div', { class: 'pv' },
+      h('div', { class: 'pv-banner', style: banner ? `background-image:url("${banner}")` : g.accentColor != null ? `background:#${g.accentColor.toString(16).padStart(6, '0')}` : '' }),
+      h('div', { class: 'pv-av' }, h('img', { src: avatar, alt: '' }), h('span', { class: `pv-dot ${pr.status}`, title: DOT[pr.status] })),
+      h('div', { class: 'pv-body' },
+        h('strong', {}, (s?.nick) || g.username), h('div', { class: 'pv-user' }, g.username, h('span', { class: 'tag' }, 'APP')),
+        line ? h('div', { class: 'pv-line' }, line, pr.fromFunction ? h('small', { class: 'muted' }, ' (from a function)') : '') : '',
+        about ? h('div', { class: 'pv-about' }, h('b', {}, 'About me'), h('p', {}, about)) : ''),
+      p.server ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Preview' },
+        h('button', { type: 'button', 'aria-pressed': String(view === 'server'), onclick: () => { view = 'server'; draw(); } }, `In ${p.server.guildName}`),
+        h('button', { type: 'button', 'aria-pressed': String(view === 'global'), onclick: () => { view = 'global'; draw(); } }, 'Everywhere else')) : '');
+  };
+
+  // Picks an image and uploads it straight away; Discord replies with the new profile.
+  const imageRow = (scope, kind, label, current, hint) => {
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', hidden: true, onchange: async () => {
+      const f = file.files[0]; file.value = '';
+      if (!f) return;
+      if (f.size > 10 * 1024 * 1024) return toast('Images can be at most 10 MB', 'bad');
+      pick.disabled = true; pick.textContent = 'Uploading…';
+      try { p = await call('PUT', `/api/core/profile/${scope}/${kind}`, f); toast(`${label} changed`); poll(); }
+      catch (e) { toast(e.message, 'bad'); }
+      draw();
+    } });
+    const pick = h('button', { type: 'button', class: 'btn', onclick: () => file.click() }, current ? 'Change…' : 'Choose…');
+    const remove = current ? h('button', { type: 'button', class: 'btn danger', onclick: async () => {
+      remove.disabled = true;
+      try { p = await call('DELETE', `/api/core/profile/${scope}/${kind}`); toast(`${label} removed`); poll(); }
+      catch (e) { toast(e.message, 'bad'); }
+      draw();
+    } }, 'Remove') : '';
+    return h('div', { class: 'field' }, h('span', { class: 'lbl' }, label), h('p', { class: 'help' }, hint),
+      h('div', { class: 'imgrow' }, current ? h('img', { src: current, alt: '', class: kind === 'banner' ? 'wide' : 'round' }) : h('span', { class: `noimg ${kind === 'banner' ? 'wide' : 'round'}` }, 'none'), pick, remove, file));
+  };
+
+  const textForm = (scope, fields) => {
+    const inputs = {};
+    const save = h('button', { class: 'btn primary', type: 'submit' }, 'Save');
+    const form = h('form', { onsubmit: async (e) => {
+      e.preventDefault();
+      const changed = {};
+      for (const [k, { input, initial }] of Object.entries(inputs)) if (input.value.trim() !== initial) changed[k] = input.value.trim();
+      if (!Object.keys(changed).length) return toast('Nothing changed');
+      if ('username' in changed && !confirm('Discord only allows about 2 username changes an hour. Change it now?')) return;
+      save.disabled = true;
+      try { p = await call('PUT', '/api/core/profile', { scope, ...changed }); toast('Saved'); poll(); draw(); }
+      catch (err) { toast(err.message, 'bad'); save.disabled = false; }
+    } });
+    for (const f of fields) {
+      const id = `pf-${scope}-${f.key}`;
+      const input = f.long ? h('textarea', { id, maxlength: f.max, rows: 3 }) : h('input', { type: 'text', id, maxlength: f.max, placeholder: f.placeholder ?? '' });
+      input.value = f.value ?? '';
+      inputs[f.key] = { input, initial: (f.value ?? '').trim() };
+      form.append(h('div', { class: 'field' }, h('label', { for: id }, f.label), f.help ? h('p', { class: 'help' }, f.help) : '', input));
+    }
+    form.append(h('div', { class: 'actions', style: 'margin-top:4px' }, save));
+    return form;
+  };
+
+  const draw = () => {
+    if (!p) return;
+    const s = p.server, g = p.global;
+    body.replaceChildren(h('div', { class: 'profile' }, h('div', {}, preview()), h('div', { class: 'stack' },
+      s ? h('div', { class: 'sub' }, h('h3', {}, `In ${s.guildName} only`),
+        h('p', { class: 'muted' }, 'Only people in this server see these. Empty means it uses the everywhere version.'),
+        s.canNick ? '' : h('div', { class: 'banner warn' }, 'OzBot lacks the “Change Nickname” permission here, so the nickname can’t be set.'),
+        textForm('server', [
+          { key: 'nick', label: 'Nickname', value: s.nick, max: 32, placeholder: g.username },
+          { key: 'bio', label: 'Server “about me”', value: s.bio, max: 190, long: true }]),
+        imageRow('server', 'avatar', 'Server avatar', s.avatar, 'Square, at least 256×256. GIFs animate.'),
+        imageRow('server', 'banner', 'Server banner', s.banner, 'Wide, about 680×240.')) : '',
+      h('div', { class: 'sub' }, h('h3', {}, 'Everywhere'),
+        h('p', { class: 'muted' }, 'The bot’s own account: every server, DMs and its profile.'),
+        textForm('global', [
+          { key: 'username', label: 'Username', value: g.username, max: 32, help: 'Discord allows about 2 changes an hour.' },
+          { key: 'about', label: 'About me', value: g.about, max: 400, long: true, help: 'Same as the app description in the developer portal.' }]),
+        imageRow('global', 'avatar', 'Avatar', g.avatar, 'Square, at least 256×256. GIFs animate.'),
+        imageRow('global', 'banner', 'Banner', g.banner, 'Wide, about 680×240.')))));
+  };
+
+  const load = async () => {
+    try { p = await call('GET', '/api/core/profile'); draw(); }
+    catch (e) { body.replaceChildren(h('p', { class: 'muted' }, e.status === 409 ? 'Connect OzBot to Discord to edit its profile.' : e.message)); }
+  };
+  load();
+  return { el, load };
 }
 
 // ---- router --------------------------------------------------------------------------------------------

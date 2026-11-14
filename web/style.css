@@ -144,3 +144,31 @@ progress { width: 100%; height: 8px; accent-color: var(--accent); }
   .mhead { gap: 12px; } .mhead .ico { width: 48px; height: 48px; border-radius: 14px; } .mhead .ico svg { width: 26px; height: 26px; }
   .kv { grid-template-columns: 1fr; } .kv dd { margin-bottom: 6px; }
 }
+/* Bot settings: profile card */
+.profile { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .profile { grid-template-columns: minmax(0, 1fr); } }
+.profile .sub { border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+.profile .sub h3 { font-size: 16px; }
+.profile .sub > p { margin: 4px 0 8px; font-size: 14px; }
+.pv { position: sticky; top: 84px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.pv-banner { height: 110px; background: var(--accent) center / cover no-repeat; }
+.pv-av { position: relative; width: 88px; height: 88px; margin: -48px 0 0 16px; }
+.pv-av img { width: 88px; height: 88px; border-radius: 50%; border: 6px solid var(--surface-2); background: var(--surface-2); object-fit: cover; }
+.pv-dot { position: absolute; right: 2px; bottom: 4px; width: 22px; height: 22px; border-radius: 50%; border: 5px solid var(--surface-2); background: #23a55a; }
+.pv-dot.idle { background: #f0b232; } .pv-dot.dnd { background: #f23f43; } .pv-dot.invisible { background: #80848e; }
+.pv-body { padding: 8px 16px 16px; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.pv-body strong { font-size: 20px; }
+.pv-user { color: var(--muted); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.pv-user .tag { background: var(--accent); color: var(--accent-ink); border: 0; font-weight: 700; font-size: 10px; padding: 1px 5px; }
+.pv-line { font-size: 14px; }
+.pv-about { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 14px; }
+.pv-about p { margin: 2px 0 0; white-space: pre-line; }
+.seg { display: flex; gap: 4px; padding: 8px; border-top: 1px solid var(--border); }
+.seg button { flex: 1; min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px 8px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.imgrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.imgrow img, .imgrow .noimg { flex: none; background: var(--surface-2); object-fit: cover; }
+.imgrow .round { width: 56px; height: 56px; border-radius: 50%; }
+.imgrow .wide { width: 140px; height: 50px; border-radius: 8px; }
+.imgrow .noimg { display: grid; place-items: center; color: var(--muted); font-size: 12px; border: 1px dashed var(--border); }
+.profile .sub form + .field { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }

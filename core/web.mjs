@@ -12,8 +12,24 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 const CORE_FIELDS = [
   { key: 'guildId', type: 'select', label: 'Server', help: 'The Discord server OzBot works in.', options: [] },
-  { key: 'statusText', type: 'text', label: 'Status text', help: 'Shown under the bot’s name in the member list.', maxLength: 120 },
+  { key: 'presence', type: 'select', label: 'Online status', help: 'The dot on the bot’s picture.', options: [
+    { value: 'online', label: 'Online (green)' }, { value: 'idle', label: 'Idle (yellow moon)' },
+    { value: 'dnd', label: 'Do not disturb (red)' }, { value: 'invisible', label: 'Invisible (shows offline, still works)' }] },
+  { key: 'activityType', type: 'select', label: 'Status line style', help: 'How the line under its name starts.', options: [
+    { value: 'custom', label: 'Just the text' }, { value: 'playing', label: 'Playing …' }, { value: 'listening', label: 'Listening to …' },
+    { value: 'watching', label: 'Watching …' }, { value: 'competing', label: 'Competing in …' }] },
+  { key: 'statusText', type: 'text', label: 'Status text', help: 'Shown under the bot’s name in the member list. Leave empty for none.', maxLength: 120 },
+  { key: 'showFunctionStatus', type: 'boolean', label: 'Let functions show what they are doing',
+    help: 'While on, “Speaking as Oz” and similar replace the status text while it lasts.' },
 ];
+
+// Profile images: Discord takes PNG, JPEG, GIF (animated) and WebP, up to 10 MB.
+const IMAGE_MAGIC = [['image/png', [0x89, 0x50, 0x4e, 0x47]], ['image/jpeg', [0xff, 0xd8, 0xff]], ['image/gif', [0x47, 0x49, 0x46, 0x38]]];
+function imageType(buf) {
+  for (const [type, sig] of IMAGE_MAGIC) if (sig.every((b, i) => buf[i] === b)) return type;
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
 
 export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
   const port = Number(process.env.OZBOT_PORT || cfg.port);
@@ -88,6 +104,10 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
       const next = { ...cur };
       if ('guildId' in body) { if (body.guildId && !/^\d{5,25}$/.test(String(body.guildId))) return json(res, 400, { error: 'Bad server id' }); next.guildId = String(body.guildId || ''); }
       if ('statusText' in body) next.statusText = String(body.statusText ?? '').slice(0, 120);
+      for (const f of CORE_FIELDS.filter((f) => f.type === 'select' && f.key !== 'guildId')) {
+        if (f.key in body) { if (!f.options.some((o) => o.value === body[f.key])) return json(res, 400, { error: `Bad ${f.label}` }); next[f.key] = body[f.key]; }
+      }
+      if ('showFunctionStatus' in body) next.showFunctionStatus = Boolean(body.showFunctionStatus);
       bot.store.set('core:settings', next);
       bot.applyPresence();
       if (next.guildId !== cur.guildId) await modules.restartAll();
@@ -102,6 +122,42 @@ export function startWeb({ root, cfg, bot, modules, tts, log, version }) {
       await modules.startAll();
       log('bot token changed');
       return json(res, 200, coreView());
+    }
+    if (p === '/api/core/profile' && method === 'GET') {
+      const prof = await bot.profile();
+      return prof ? json(res, 200, prof) : json(res, 409, { error: 'OzBot is not connected to Discord' });
+    }
+    // Text fields: { scope: 'global'|'server', username?, about?, nick?, bio? }
+    if (p === '/api/core/profile' && method === 'PUT') {
+      const body = await readJson(req);
+      const scope = body.scope === 'server' ? 'server' : 'global';
+      const allowed = scope === 'global' ? { username: [2, 32], about: [0, 400] } : { nick: [0, 32], bio: [0, 190] };
+      const ch = {};
+      for (const [k, [min, max]] of Object.entries(allowed)) {
+        if (!(k in body)) continue;
+        const v = String(body[k] ?? '').trim();
+        if (v.length < min || v.length > max) return json(res, 400, { error: `${k} must be ${min}-${max} characters` });
+        ch[k] = k === 'nick' && !v ? null : v;
+      }
+      if (!Object.keys(ch).length) return json(res, 400, { error: 'Nothing to change' });
+      try { await bot.editProfile(scope, ch); } catch (e) { return json(res, 400, { error: e.message }); }
+      log(`profile (${scope}) changed: ${Object.keys(ch).join(', ')}`);
+      return json(res, 200, await bot.profile());
+    }
+    // Images: PUT raw bytes (or DELETE to remove) /api/core/profile/<global|server>/<avatar|banner>
+    if ((m = p.match(/^\/api\/core\/profile\/(global|server)\/(avatar|banner)$/)) && (method === 'PUT' || method === 'DELETE')) {
+      let value = null;
+      if (method === 'PUT') {
+        let size = 0; const chunks = [];
+        for await (const c of req) { size += c.length; if (size > 10 * 1024 * 1024) return json(res, 413, { error: 'Images can be at most 10 MB' }); chunks.push(c); }
+        const buf = Buffer.concat(chunks);
+        const type = imageType(buf);
+        if (!type) return json(res, 400, { error: 'Use a PNG, JPEG, GIF or WebP image' });
+        value = `data:${type};base64,${buf.toString('base64')}`;
+      }
+      try { await bot.editProfile(m[1], { [m[2]]: value }); } catch (e) { return json(res, 400, { error: e.message }); }
+      log(`profile (${m[1]}) ${m[2]} ${value ? 'changed' : 'removed'}`);
+      return json(res, 200, await bot.profile());
     }
     if ((m = p.match(/^\/api\/modules\/([a-z0-9-]+)$/)) && method === 'GET') {
       const d = await modules.detail(m[1]);
