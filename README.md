@@ -8,7 +8,9 @@ each function on or off and holds all its settings.
 core/       Discord client, module system, settings store (SQLite), TTS manager, dashboard web server
 modules/    one folder per function (manifest.json + index.mjs + optional panel.js)
   markov/   learns from chosen channels, makes sentences, /markov
-  voice/    joins voice, speaks random sentences on a timer, /join /leave /say /speak
+  voice/    joins voice, speaks random sentences on a timer, /join /leave /say /speak /voice set|list|current;
+            not in voice: /say and /speak reply with an MP3 clip
+  voicelog/ posts every spoken line to a channel ("text" - Voice + MP3), join/leave notes
   voices/   voice library: record training clips in the browser, upload .onnx voices, name/tune/preview them
 web/        dashboard (no build step)
 tts/        Piper worker (Python), started on demand, stopped when idle
@@ -60,12 +62,15 @@ Create `modules/<id>/`:
   (`chat`/`mic`/`wave`/`puzzle`), `order`, optional `requires`/`provides` (service names), `enabledByDefault`, and
   `settings` (a list of fields).
   - Field types: `text`, `textarea`, `number` (min/max/step), `boolean`, `select` (options), `textChannel`,
-    `textChannels`, `voiceChannel`, `voice`.
+    `textChannels`, `voiceChannel`, `voice`, `role`.
   - The dashboard builds the settings form from this list, and the core validates values before your module sees them.
 - `index.mjs`: `export default { start(ctx), stop?(ctx), settingsChanged?(ctx, now, old), commands?, routes?, status?(ctx) }`
   - `ctx.on(event, fn)`, `ctx.every(ms, fn)` and `ctx.after(ms, fn)` are cleaned up automatically when the module is
     switched off. Errors inside them are counted, and 5 errors in 10 minutes switches the module off with the reason
     shown on its page.
+  - `ctx.emit(event, payload)` / `ctx.subscribe(event, fn)`: module events (e.g. Voice chat emits `voice:spoken`,
+    `voice:joined`, `voice:left`; Voice log subscribes). `ctx.saveSettings(partial)`, `ctx.setStatus(text|null)`.
+  - `buttons(ctx, interaction)`: button/menu clicks whose customId starts with `<id>:`.
   - `ctx.settings`, `ctx.db` (shared SQLite; prefix your tables with your id), `ctx.store`, `ctx.guild()`,
     `ctx.client`, `ctx.tts`, `ctx.log()`, `ctx.provide(name, api)` / `ctx.use(name)` to share with other modules,
     `ctx.fail(err)`.

@@ -20,11 +20,24 @@ export async function render(el, api) {
   sayBtn.onclick = run(sayBtn, async () => { const r = await api.post('say', { text: text.value, voice: voiceSel.value }); text.value = ''; toast(`Saying: ${r.said}`); });
   speakBtn.onclick = run(speakBtn, async () => { const r = await api.post('speak', { voice: voiceSel.value }); toast(`Saying: ${r.said}`); });
 
+  const recentBox = h('ul', { class: 'list' });
+  const recentCard = h('section', { class: 'card' }, h('h2', {}, 'Recent lines'), recentBox);
   el.append(h('div', { class: 'cols' },
     h('section', { class: 'card' }, h('h2', {}, 'Right now'), statusBox,
       h('div', { class: 'actions' }, chanSel, joinBtn, leaveBtn)),
     h('section', { class: 'card' }, h('h2', {}, 'Talk'), text,
-      h('div', { class: 'actions' }, voiceSel, sayBtn, speakBtn))));
+      h('div', { class: 'actions' }, voiceSel, sayBtn, speakBtn))), recentCard);
+
+  let lastRecent = '';
+  async function playLine(index, btn) {
+    btn.disabled = true; btn.textContent = '…';
+    try {
+      const r = await api.fetchRaw('play-line', { index });
+      const a = new Audio(URL.createObjectURL(await r.blob()));
+      await a.play().catch(() => {});
+    } catch (e) { toast(e.message, 'bad'); }
+    btn.disabled = false; btn.textContent = '▶';
+  }
 
   const g = (await api.guild()).guild;
   const home = api.module.settings?.homeChannel;
@@ -44,10 +57,22 @@ export async function render(el, api) {
     if (!s.markov) speakBtn.disabled = true;
     statusBox.replaceChildren(...[
       h('dt', {}, 'Channel'), h('dd', {}, s.channel ? `🔊 ${s.channel.name}` : 'Not in voice'),
+      h('dt', {}, 'Voice'), h('dd', {}, `${s.voiceName}${s.voiceMode === 'random' ? ' (random lines: random voice)' : ''}`),
       s.channel ? [h('dt', {}, 'People there'), h('dd', {}, String(s.humans))] : null,
       s.channel ? [h('dt', {}, 'Next random line'), h('dd', {}, s.nextTalkAt ? `in ${Math.max(0, Math.round((s.nextTalkAt - Date.now()) / 60000 * 10) / 10)} min` : 'random talk off')] : null,
       h('dt', {}, 'Queue'), h('dd', {}, s.speaking ? `speaking, ${s.queue} waiting` : `${s.queue} waiting`),
       s.last ? [h('dt', {}, 'Last said'), h('dd', {}, `“${s.last.text}” (${s.last.voice}, ${api.ago(s.last.at)})`)] : null,
       s.markov ? null : [h('dt', {}, 'Note'), h('dd', {}, 'Markov chat is off: no random sentences, /say still works.')]].flat().filter(Boolean));
+    const key = JSON.stringify(s.recent.map((r) => r.at));
+    if (key !== lastRecent) {
+      lastRecent = key;
+      recentBox.replaceChildren(...(s.recent.length ? s.recent.map((r, n) => {
+        const play = h('button', { class: 'btn', type: 'button', title: 'Play', 'aria-label': 'Play this line', style: 'min-height:34px;padding:4px 12px' }, '▶');
+        play.onclick = () => playLine(n, play);
+        return h('li', { style: 'display:flex;gap:12px;align-items:flex-start' }, play,
+          h('div', {}, h('div', {}, `“${r.text}”`), h('div', { class: 'muted', style: 'font-size:13px' },
+            `${r.voice} · ${r.source}${r.user ? ` · ${r.user}` : ''} · ${api.ago(r.at)}`)));
+      }) : [h('li', { class: 'muted' }, 'Nothing said yet since the bot started.')]));
+    }
   });
 }

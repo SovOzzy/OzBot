@@ -5,6 +5,7 @@ export const ICONS = {
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 10.5h7M8.5 14h4"/></svg>',
   mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   wave: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h1M7 8v8M11 4v16M15 7v10M19 10v4M22 12h-1"/></svg>',
+  quote: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M9 9.5c0 1.5-.8 2.5-2 3M14.5 9.5c0 1.5-.8 2.5-2 3"/></svg>',
   puzzle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3h7Z"/></svg>',
   cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
   back: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
@@ -141,7 +142,7 @@ function pageDashboard() {
 
 // Settings form from manifest fields.
 async function settingsForm(fields, values, onSave) {
-  if (fields.some((f) => /Channel/.test(f.type))) await loadGuild(true);
+  if (fields.some((f) => /Channel/.test(f.type) || f.type === 'role')) await loadGuild(true);
   if (fields.some((f) => f.type === 'voice')) await loadVoices(true);
   const g = guild?.guild;
   const form = h('form', { novalidate: true });
@@ -172,10 +173,14 @@ async function settingsForm(fields, values, onSave) {
       input.read = () => [...box.querySelectorAll('input:checked')].map((i) => i.value);
       wrap = h('div', { class: 'field' }, h('span', { class: 'lbl', id: `${id}-l` }, f.label), help, box, err);
     } else {
-      if (f.type === 'select' || f.type === 'textChannel' || f.type === 'voiceChannel' || f.type === 'voice') {
+      if (f.type === 'select' || f.type === 'textChannel' || f.type === 'voiceChannel' || f.type === 'voice' || f.type === 'role') {
         let opts;
         if (f.type === 'select') opts = f.options.map((o) => [o.value, o.label]);
         else if (f.type === 'voice') opts = [['', 'Default voice'], ...(voices ?? []).map((x) => [x.id, x.profile.name || x.id])];
+        else if (f.type === 'role') {
+          opts = [['', 'Everyone'], ...(g?.roles ?? []).map((r) => [r.id, `@${r.name}`])];
+          if (v && !(g?.roles ?? []).some((r) => r.id === v)) opts.push([v, `unknown role ${v}`]);
+        }
         else {
           const list = (f.type === 'textChannel' ? g?.textChannels : g?.voiceChannels) ?? [];
           opts = [['', '(none)'], ...list.map((c) => [c.id, `${f.type === 'textChannel' ? '#' : '🔊 '}${c.name}${c.category ? ` · ${c.category}` : ''}`])];

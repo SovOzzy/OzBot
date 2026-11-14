@@ -1,0 +1,62 @@
+{
+  "id": "voicelog",
+  "name": "Voice log",
+  "description": "Posts everything OzBot says in voice to a channel: the quote, which voice said it, and the audio clip.\nIt also notes when OzBot joins and leaves a call.",
+  "icon": "quote",
+  "order": 25,
+  "settings": [
+    {
+      "key": "channel",
+      "type": "textChannel",
+      "label": "Post to channel",
+      "help": "OzBot needs Send Messages and Attach Files there.",
+      "default": ""
+    },
+    {
+      "key": "format",
+      "type": "text",
+      "label": "Message format",
+      "help": "{text} = what was said, {voice} = voice name, {user} = who asked (no ping), {source} = random line, /speak, /say…",
+      "default": "\"{text}\" - {voice}",
+      "maxLength": 200
+    },
+    {
+      "key": "attachAudio",
+      "type": "boolean",
+      "label": "Attach the audio clip",
+      "help": "MP3, plays inline in Discord. Nothing is kept on the server.",
+      "default": true
+    },
+    {
+      "key": "postRandom",
+      "type": "boolean",
+      "label": "Post random lines",
+      "default": true
+    },
+    {
+      "key": "postSpeak",
+      "type": "boolean",
+      "label": "Post /speak lines",
+      "default": true
+    },
+    {
+      "key": "postSay",
+      "type": "boolean",
+      "label": "Post /say lines",
+      "default": true
+    },
+    {
+      "key": "postGreeting",
+      "type": "boolean",
+      "label": "Post the join greeting",
+      "default": false
+    },
+    {
+      "key": "sessionNotes",
+      "type": "boolean",
+      "label": "Join / leave notes",
+      "help": "“🔊 Joined TheRoundTable” and “👋 Left after 1 h 20 min, said 14 lines”.",
+      "default": true
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 // and the core coerces/validates whatever comes back before a module ever sees it.
 //
 // Field: { key, type, label, help?, default?, min?, max?, step?, options?: [{value,label}], maxLength? }
-// Types: text, textarea, number, boolean, select, textChannel, textChannels, voiceChannel, voice
+// Types: text, textarea, number, boolean, select, textChannel, textChannels, voiceChannel, voice, role
 
 const SNOWFLAKE = /^\d{5,25}$/;
 
@@ -40,8 +40,8 @@ export function coerce(fields = [], input = {}, current = {}) {
         if (!ok) { errors[f.key] = 'Not one of the options'; break; }
         out[f.key] = (f.options.find((o) => String(o.value) === String(v))).value; break;
       }
-      case 'textChannel': case 'voiceChannel':
-        if (v !== '' && v != null && !SNOWFLAKE.test(String(v))) { errors[f.key] = 'Bad channel id'; break; }
+      case 'textChannel': case 'voiceChannel': case 'role':
+        if (v !== '' && v != null && !SNOWFLAKE.test(String(v))) { errors[f.key] = f.type === 'role' ? 'Bad role id' : 'Bad channel id'; break; }
         out[f.key] = v ? String(v) : ''; break;
       case 'textChannels': {
         const arr = Array.isArray(v) ? v.map(String) : [];

@@ -26,6 +26,7 @@ export class Bot extends EventEmitter {
     this.error = null;
     this.readyAt = null;
     this.client = null;
+    this.presenceOverrides = new Map(); // module id -> status text (e.g. 'Speaking as Oz')
     this.#makeClient();
   }
 
@@ -77,9 +78,14 @@ export class Bot extends EventEmitter {
 
   async stop() { await this.client.destroy().catch(() => {}); this.state = 'offline'; }
 
+  setPresenceOverride(moduleId, text) {
+    if (text) this.presenceOverrides.set(moduleId, String(text).slice(0, 120)); else this.presenceOverrides.delete(moduleId);
+    this.applyPresence();
+  }
+
   applyPresence() {
     if (this.state !== 'online') return;
-    const text = this.core.statusText?.trim();
+    const text = [...this.presenceOverrides.values()].at(-1) ?? this.core.statusText?.trim();
     this.client.user.setPresence({ activities: text ? [{ name: text, type: ActivityType.Custom, state: text }] : [], status: 'online' });
   }
 
@@ -100,6 +106,7 @@ export class Bot extends EventEmitter {
     const id = this.client.user?.id ?? this.store.get('core:appId', '');
     if (!id) return null;
     const perms = PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ReadMessageHistory
+      | PermissionFlagsBits.AttachFiles | PermissionFlagsBits.EmbedLinks
       | PermissionFlagsBits.Connect | PermissionFlagsBits.Speak | PermissionFlagsBits.UseVAD;
     return `https://discord.com/oauth2/authorize?client_id=${id}&scope=bot%20applications.commands&permissions=${perms}`;
   }
@@ -115,10 +122,14 @@ export class Bot extends EventEmitter {
         id: c.id, name: c.name, category: c.parent?.name ?? '',
         canRead: me ? c.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory]) : false,
         canSpeak: me ? c.permissionsFor(me)?.has([PermissionFlagsBits.Connect, PermissionFlagsBits.Speak]) : false,
+        canPost: me ? c.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]) : false,
+        canAttach: me ? c.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles]) : false,
       }));
     return {
       id: g.id, name: g.name, icon: g.iconURL({ size: 128 }), members: g.memberCount,
       textChannels: chan([ChannelType.GuildText, ChannelType.GuildAnnouncement]),
+      roles: g.roles.cache.filter((r) => r.id !== g.id && !r.managed).sort((a, b) => b.position - a.position)
+        .map((r) => ({ id: r.id, name: r.name })),
       voiceChannels: chan([ChannelType.GuildVoice, ChannelType.GuildStageVoice]),
     };
   }

@@ -8,6 +8,7 @@
 import { readdirSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { EventEmitter } from 'node:events';
 import { Events, MessageFlags } from 'discord.js';
 import { coerce, defaults } from './schema.mjs';
 
@@ -21,6 +22,8 @@ export class ModuleManager {
     this.services = new Map();  // name -> { from, api }
     this.commandTimer = null;
     this.busy = Promise.resolve();
+    this.bus = new EventEmitter(); // module-to-module events (ctx.emit / ctx.subscribe)
+    this.bus.setMaxListeners(100);
   }
 
   async load() {
@@ -77,6 +80,15 @@ export class ModuleManager {
       every(ms, fn) { const t = setInterval(guard(fn, 'timer'), ms); m.disposers.push(() => clearInterval(t)); return t; },
       after(ms, fn) { const t = setTimeout(guard(fn, 'timer'), ms); m.disposers.push(() => clearTimeout(t)); return t; },
       onDispose(fn) { m.disposers.push(fn); },
+      // Module events: e.g. Voice chat emits 'voice:spoken', Voice log subscribes. Listeners are guarded like ctx.on.
+      emit(event, payload) { mgr.bus.emit(event, payload); },
+      subscribe(event, fn) {
+        const g = guard(fn, `event ${event}`);
+        mgr.bus.on(event, g);
+        m.disposers.push(() => mgr.bus.off(event, g));
+      },
+      saveSettings: (partial) => this.saveSettings(id, partial),
+      setStatus: (text) => this.bot.setPresenceOverride(id, text),
       provide(name, api) { mgr.services.set(name, { from: id, api }); m.disposers.push(() => mgr.services.delete(name)); },
       use(name) { return mgr.services.get(name)?.api ?? null; },
       fail: (e) => this.#recordError(m, e instanceof Error ? e : new Error(String(e)), 'module'),
@@ -202,6 +214,20 @@ export class ModuleManager {
 
   attachInteractions() {
     this.bot.client.on(Events.InteractionCreate, async (i) => {
+      // Buttons/menus: customId "<moduleId>:<anything>" goes to that module's buttons(ctx, interaction).
+      if (i.isButton() || i.isStringSelectMenu()) {
+        const m = this.mods.get(i.customId.split(':')[0]);
+        if (!m?.running || !m.impl.buttons) {
+          const content = m?.running ? 'That button no longer does anything.' : 'That function is switched off right now.';
+          return i.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+        try { await m.impl.buttons(m.ctx, i); } catch (e) {
+          this.#recordError(m, e, `button ${i.customId}`);
+          const reply = { content: 'Something went wrong with that button.', flags: MessageFlags.Ephemeral };
+          (i.deferred || i.replied ? i.followUp(reply) : i.reply(reply)).catch(() => {});
+        }
+        return;
+      }
       if (!i.isChatInputCommand() && !i.isAutocomplete()) return;
       for (const m of this.mods.values()) {
         if (!m.running) continue;
